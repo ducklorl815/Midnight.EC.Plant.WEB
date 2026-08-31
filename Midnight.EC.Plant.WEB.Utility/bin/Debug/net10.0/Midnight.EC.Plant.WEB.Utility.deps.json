@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "Midnight.EC.Plant.WEB.Utility/1.0.0": {
+        "runtime": {
+          "Midnight.EC.Plant.WEB.Utility.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Midnight.EC.Plant.WEB.Utility/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

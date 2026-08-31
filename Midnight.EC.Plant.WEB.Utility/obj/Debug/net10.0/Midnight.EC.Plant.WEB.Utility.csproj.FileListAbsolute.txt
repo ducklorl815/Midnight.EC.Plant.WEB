@@ -1,0 +1,11 @@
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.deps.json
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.dll
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.pdb
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.GeneratedMSBuildEditorConfig.editorconfig
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.AssemblyInfoInputs.cache
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.AssemblyInfo.cs
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.csproj.CoreCompileInputs.cache
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.dll
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\refint\Midnight.EC.Plant.WEB.Utility.dll
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.pdb
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\ref\Midnight.EC.Plant.WEB.Utility.dll

@@ -1,0 +1,53 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\Project\\Midnight.EC.Plant.WEB\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{7ABD9BC9-7F18-EE6B-748B-3B63AD505E42}|Midnight.EC.Plant.WEB\\Midnight.EC.Plant.WEB.csproj|d:\\project\\midnight.ec.plant.web\\midnight.ec.plant.web\\appsettings.development.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{7ABD9BC9-7F18-EE6B-748B-3B63AD505E42}|Midnight.EC.Plant.WEB\\Midnight.EC.Plant.WEB.csproj|solutionrelative:midnight.ec.plant.web\\appsettings.development.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7ABD9BC9-7F18-EE6B-748B-3B63AD505E42}|Midnight.EC.Plant.WEB\\Midnight.EC.Plant.WEB.csproj|d:\\project\\midnight.ec.plant.web\\midnight.ec.plant.web\\controllers\\homecontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7ABD9BC9-7F18-EE6B-748B-3B63AD505E42}|Midnight.EC.Plant.WEB\\Midnight.EC.Plant.WEB.csproj|solutionrelative:midnight.ec.plant.web\\controllers\\homecontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "appsettings.Development.json",
+              "DocumentMoniker": "D:\\Project\\Midnight.EC.Plant.WEB\\Midnight.EC.Plant.WEB\\appsettings.Development.json",
+              "RelativeDocumentMoniker": "Midnight.EC.Plant.WEB\\appsettings.Development.json",
+              "ToolTip": "D:\\Project\\Midnight.EC.Plant.WEB\\Midnight.EC.Plant.WEB\\appsettings.Development.json",
+              "RelativeToolTip": "Midnight.EC.Plant.WEB\\appsettings.Development.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2026-08-31T14:31:23.598Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "HomeController.cs",
+              "DocumentMoniker": "D:\\Project\\Midnight.EC.Plant.WEB\\Midnight.EC.Plant.WEB\\Controllers\\HomeController.cs",
+              "RelativeDocumentMoniker": "Midnight.EC.Plant.WEB\\Controllers\\HomeController.cs",
+              "ToolTip": "D:\\Project\\Midnight.EC.Plant.WEB\\Midnight.EC.Plant.WEB\\Controllers\\HomeController.cs",
+              "RelativeToolTip": "Midnight.EC.Plant.WEB\\Controllers\\HomeController.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-08-31T13:04:05.546Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

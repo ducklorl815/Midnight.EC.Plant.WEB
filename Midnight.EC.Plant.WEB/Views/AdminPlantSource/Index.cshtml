@@ -1,0 +1,52 @@
+@model Midnight.EC.Plant.WEB.ViewModels.AdminPlantSourceListViewModel
+@{
+    ViewData["Title"] = "Admin - 外部來源";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">外部資料來源</h1>
+    <a asp-action="Create" class="btn btn-success">+ 新增來源</a>
+</div>
+
+@if (TempData["Success"] is string success)
+{
+    <div class="alert alert-success">@success</div>
+}
+
+<table class="table table-striped align-middle">
+    <thead>
+        <tr>
+            <th>物種</th>
+            <th>標題</th>
+            <th>URL</th>
+            <th>類型</th>
+            <th>可靠度</th>
+            <th>建立時間</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var item in Model.Sources)
+        {
+            <tr>
+                <td>@item.SpeciesName</td>
+                <td>@(item.Title ?? "-")</td>
+                <td class="text-truncate" style="max-width:280px;"><a href="@item.Url" target="_blank">@item.Url</a></td>
+                <td>@item.SourceType</td>
+                <td>@item.ReliabilityLevel</td>
+                <td>@item.CreatedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</td>
+                <td><a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">查看</a></td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@if (!Model.Sources.Any())
+{
+    <div class="alert alert-info">尚無外部來源，請先新增。</div>
+}
+
+<div class="alert alert-secondary mt-4">
+    <strong>備註：</strong>若要啟用完整外部植物 API 與 AI 分析，請設定
+    <code>ExternalPlantApi:Trefle:ApiKey</code> 與 <code>AI:OpenAI:ApiKey</code>（建議使用 User Secrets）。
+</div>

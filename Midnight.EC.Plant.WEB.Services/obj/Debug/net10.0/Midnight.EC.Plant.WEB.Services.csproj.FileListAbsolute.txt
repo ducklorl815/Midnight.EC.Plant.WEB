@@ -1,0 +1,17 @@
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Services.deps.json
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Services.dll
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Services.pdb
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Services.GeneratedMSBuildEditorConfig.editorconfig
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Services.AssemblyInfoInputs.cache
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Services.AssemblyInfo.cs
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Services.csproj.CoreCompileInputs.cache
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Services.dll
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\obj\Debug\net10.0\refint\Midnight.EC.Plant.WEB.Services.dll
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Services.pdb
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\obj\Debug\net10.0\ref\Midnight.EC.Plant.WEB.Services.dll
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Services.csproj.AssemblyReference.cache
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Models.dll
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.dll
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Models.pdb
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.pdb
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Services\obj\Debug\net10.0\Midnight.526A2633.Up2Date

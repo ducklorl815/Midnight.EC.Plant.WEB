@@ -1,0 +1,7 @@
+HTTP/1.1 302 Found
+Content-Length: 0
+Date: Mon, 31 Aug 2026 14:27:07 GMT
+Server: Kestrel
+Location: /Plant/Details/4
+Set-Cookie: .AspNetCore.Mvc.CookieTempDataProvider=CfDJ8FAadDc9Vo1HhtxgOAwWY3uOPPLTNP7zaCr5U-LLFHbTugfiXR4w4eBkhb2mPANr4Gf7SvSVzHCD_bWjxbzQqwCUxW1RamHsiQN8hrmGq49iYJYWlx1jUzXQUFkRIeBHLRpn0898zSDc_EuVgiukgIA02JTrhSmshE36d2HqmB9z4u_BE-chYSoHVtHe7yfLTZklsMqewN5C25_OeuawpJk; path=/; samesite=lax; httponly
+

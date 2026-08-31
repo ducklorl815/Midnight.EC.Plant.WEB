@@ -1,0 +1,57 @@
+@model Midnight.EC.Plant.WEB.ViewModels.AdminPlantSourceDetailViewModel
+@{
+    ViewData["Title"] = "Admin - 來源詳情";
+}
+
+<div class="mb-3"><a asp-action="Index">&larr; 返回列表</a></div>
+
+<h1 class="mb-1">@(Model.Title ?? "外部來源")</h1>
+<p class="text-muted">@Model.SpeciesName · @Model.SourceType · 可靠度 @Model.ReliabilityLevel</p>
+
+@if (TempData["Success"] is string success)
+{
+    <div class="alert alert-success">@success</div>
+}
+@if (TempData["Error"] is string error)
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-2">URL</dt><dd class="col-sm-10"><a href="@Model.Url" target="_blank">@Model.Url</a></dd>
+            <dt class="col-sm-2">Domain</dt><dd class="col-sm-10">@Model.Domain</dd>
+            <dt class="col-sm-2">Author</dt><dd class="col-sm-10">@(Model.Author ?? "-")</dd>
+            <dt class="col-sm-2">URL Hash</dt><dd class="col-sm-10"><code>@Model.ContentHash</code></dd>
+        </dl>
+    </div>
+</div>
+
+@if (Model.LatestContent != null)
+{
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><strong>最新解析內容</strong></div>
+        <div class="card-body">
+            <p><strong>Parser：</strong>@Model.LatestContent.ParserType</p>
+            <p><strong>Status：</strong>@Model.LatestContent.Status</p>
+            @if (!string.IsNullOrWhiteSpace(Model.LatestContent.ErrorMessage))
+            {
+                <div class="alert alert-warning">@Model.LatestContent.ErrorMessage</div>
+            }
+            <p><strong>Summary：</strong>@Model.LatestContent.Summary</p>
+            <p><strong>Keywords：</strong>@Model.LatestContent.Keywords</p>
+            <p><strong>Content Hash：</strong><code>@Model.LatestContent.ContentHash</code></p>
+            @if (!string.IsNullOrWhiteSpace(Model.LatestContent.CleanText))
+            {
+                <h6>CleanText</h6>
+                <pre class="bg-light p-3 rounded small" style="max-height:400px;overflow:auto;">@Model.LatestContent.CleanText</pre>
+            }
+        </div>
+    </div>
+}
+
+<form asp-action="Reparse" asp-route-id="@Model.Id" method="post">
+    @Html.AntiForgeryToken()
+    <button type="submit" class="btn btn-warning">重新解析</button>
+</form>

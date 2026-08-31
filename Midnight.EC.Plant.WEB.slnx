@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Midnight.EC.Plant.WEB.Models/Midnight.EC.Plant.WEB.Models.csproj" />
+  <Project Path="Midnight.EC.Plant.WEB.Services/Midnight.EC.Plant.WEB.Services.csproj" />
+  <Project Path="Midnight.EC.Plant.WEB.Utility/Midnight.EC.Plant.WEB.Utility.csproj" />
+  <Project Path="Midnight.EC.Plant.WEB/Midnight.EC.Plant.WEB.csproj" />
+</Solution>

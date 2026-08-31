@@ -1,0 +1,155 @@
+using Microsoft.Extensions.Options;
+using Midnight.EC.Plant.WEB.Models.DTOs;
+using Midnight.EC.Plant.WEB.Models.Entities;
+using Midnight.EC.Plant.WEB.Models.Extensions;
+using Midnight.EC.Plant.WEB.Models.Repositories;
+using Midnight.EC.Plant.WEB.Services.Configuration;
+using Midnight.EC.Plant.WEB.Services.Interfaces;
+using Midnight.EC.Plant.WEB.Utility.Hash;
+
+namespace Midnight.EC.Plant.WEB.Services.PlantDiary;
+
+public class LocalImageStorageService : IImageStorageService
+{
+    private readonly StorageOptions _options;
+
+    public LocalImageStorageService(IOptions<StorageOptions> options)
+    {
+        _options = options.Value;
+    }
+
+    public async Task<StoredImageResult> SaveAsync(Stream stream, string originalFileName, string contentType, int plantId, CancellationToken cancellationToken = default)
+    {
+        var extension = Path.GetExtension(originalFileName);
+        var fileName = $"{Guid.NewGuid():N}{extension}";
+        var relativeFolder = Path.Combine(_options.RootPath, plantId.ToString(), "photos");
+        var absoluteFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativeFolder);
+        Directory.CreateDirectory(absoluteFolder);
+
+        var absolutePath = Path.Combine(absoluteFolder, fileName);
+        await using var fileStream = File.Create(absolutePath);
+        await stream.CopyToAsync(fileStream, cancellationToken);
+
+        var relativePath = Path.Combine(relativeFolder, fileName).Replace('\\', '/');
+        var sha256 = await ComputeSha256Async(absolutePath, cancellationToken);
+
+        return new StoredImageResult
+        {
+            FileName = fileName,
+            StoragePath = relativePath,
+            ThumbnailPath = relativePath,
+            FileSize = new FileInfo(absolutePath).Length,
+            Sha256 = sha256
+        };
+    }
+
+    public string GetPublicPath(string storagePath) => $"/{storagePath.Replace('\\', '/')}";
+
+    private static async Task<string> ComputeSha256Async(string absolutePath, CancellationToken cancellationToken)
+    {
+        await using var stream = File.OpenRead(absolutePath);
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory, cancellationToken);
+        return HashHelper.ComputeSha256(Convert.ToBase64String(memory.ToArray()));
+    }
+}
+
+public class PlantImageService : IPlantImageService
+{
+    private readonly IPlantRepository _plantRepository;
+    private readonly IPlantImageRepository _imageRepository;
+    private readonly IImageStorageService _imageStorageService;
+
+    public PlantImageService(
+        IPlantRepository plantRepository,
+        IPlantImageRepository imageRepository,
+        IImageStorageService imageStorageService)
+    {
+        _plantRepository = plantRepository;
+        _imageRepository = imageRepository;
+        _imageStorageService = imageStorageService;
+    }
+
+    public async Task<List<PlantImageDto>> GetByPlantIdAsync(int plantId, CancellationToken cancellationToken = default)
+    {
+        var images = await _imageRepository.GetByPlantIdAsync(plantId, cancellationToken);
+        return images.Select(i => i.ToDto()).ToList();
+    }
+
+    public async Task<PlantImageDto?> GetCoverAsync(int plantId, CancellationToken cancellationToken = default)
+    {
+        var cover = await _imageRepository.GetCoverByPlantIdAsync(plantId, cancellationToken);
+        return cover?.ToDto();
+    }
+
+    public async Task<PlantImageDto> UploadAsync(
+        int plantId,
+        Stream stream,
+        string fileName,
+        string contentType,
+        string? note,
+        bool setAsCover,
+        CancellationToken cancellationToken = default)
+    {
+        _ = await _plantRepository.GetByIdAsync(plantId, cancellationToken)
+            ?? throw new InvalidOperationException("找不到植物。");
+
+        var stored = await _imageStorageService.SaveAsync(stream, fileName, contentType, plantId, cancellationToken);
+
+        if (setAsCover)
+        {
+            await _imageRepository.ClearCoverAsync(plantId, cancellationToken);
+        }
+
+        var image = new PlantImage
+        {
+            PlantId = plantId,
+            Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+            IsCover = setAsCover,
+            FileName = stored.FileName,
+            StoragePath = stored.StoragePath,
+            ThumbnailPath = stored.ThumbnailPath,
+            OriginalFileName = fileName,
+            ContentType = contentType,
+            FileSize = stored.FileSize,
+            Sha256 = stored.Sha256,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _imageRepository.AddAsync(image, cancellationToken);
+        await _imageRepository.SaveChangesAsync(cancellationToken);
+
+        return image.ToDto();
+    }
+
+    public async Task SetCoverAsync(int plantId, int imageId, CancellationToken cancellationToken = default)
+    {
+        var image = await _imageRepository.GetByIdAsync(imageId, cancellationToken)
+            ?? throw new InvalidOperationException("找不到圖片。");
+
+        if (image.PlantId != plantId)
+        {
+            throw new InvalidOperationException("圖片不屬於指定植物。");
+        }
+
+        await _imageRepository.ClearCoverAsync(plantId, cancellationToken);
+        image.IsCover = true;
+        await _imageRepository.UpdateAsync(image, cancellationToken);
+        await _imageRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteAsync(int imageId, CancellationToken cancellationToken = default)
+    {
+        var image = await _imageRepository.GetByIdAsync(imageId, cancellationToken)
+            ?? throw new InvalidOperationException("找不到圖片。");
+
+        var absolutePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", image.StoragePath);
+        if (File.Exists(absolutePath))
+        {
+            File.Delete(absolutePath);
+        }
+
+        await _imageRepository.DeleteAsync(image, cancellationToken);
+        await _imageRepository.SaveChangesAsync(cancellationToken);
+    }
+}

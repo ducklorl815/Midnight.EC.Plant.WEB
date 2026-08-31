@@ -1,0 +1,358 @@
+@model Midnight.EC.Plant.WEB.ViewModels.PlantDetailViewModel
+@{
+    ViewData["Title"] = Model.Name;
+    var fertilizerHint = Model.Knowledge?.FertilizerRequirement;
+}
+
+<div class="mb-3">
+    <a asp-action="Index" class="text-decoration-none text-muted">&larr; 返回我的植栽</a>
+</div>
+
+@if (TempData["Error"] is string errorMessage)
+{
+    <div class="alert alert-warning">@errorMessage</div>
+}
+@if (TempData["Success"] is string successMessage)
+{
+    <div class="alert alert-success">@successMessage</div>
+}
+
+<section class="plant-hero mb-4">
+    <div class="plant-hero-cover">
+        @if (!string.IsNullOrWhiteSpace(Model.CoverImagePath))
+        {
+            <img src="@Model.CoverImagePath" alt="@Model.Name 封面" />
+        }
+        else
+        {
+            <div class="plant-hero-placeholder">
+                <span>🌿</span>
+                <small>尚未設定封面，可在下方照片上傳並設為封面</small>
+            </div>
+        }
+    </div>
+    <div class="plant-hero-info">
+        <h1 class="plant-hero-title">@Model.Name</h1>
+        <p class="plant-hero-meta">
+            @(Model.SpeciesName ?? "未知物種")
+            @if (!string.IsNullOrWhiteSpace(Model.Location))
+            {
+                <span> · @Model.Location</span>
+            }
+        </p>
+        @if (Model.LatestHealthScore.HasValue)
+        {
+            <span class="health-badge health-badge-@(Model.LatestHealthScore >= 70 ? "good" : Model.LatestHealthScore >= 50 ? "warn" : "bad")">
+                健康度 @Model.LatestHealthScore
+            </span>
+        }
+    </div>
+</section>
+
+@if (Model.Reminders.Any())
+{
+    <section class="panel panel-reminder mb-4">
+        <div class="panel-header"><strong>智慧提醒</strong></div>
+        <div class="panel-body p-0">
+            <ul class="list-group list-group-flush">
+                @foreach (var reminder in Model.Reminders)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <div class="fw-semibold @(reminder.IsOverdue ? "text-danger" : string.Empty)">
+                                @reminder.Title
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(reminder.Message))
+                            {
+                                <div class="small text-muted mt-1">@reminder.Message</div>
+                            }
+                            <div class="small text-muted">到期：@reminder.DueDate.ToString("yyyy/MM/dd")</div>
+                        </div>
+                        <form asp-action="DismissReminder" asp-route-id="@Model.Id" asp-route-reminderId="@reminder.Id" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">略過</button>
+                        </form>
+                    </li>
+                }
+            </ul>
+        </div>
+    </section>
+}
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-7">
+        <section class="panel h-100">
+            <div class="panel-header">
+                <strong>官方栽培說明</strong>
+                <span class="badge-soft">外部來源整合</span>
+            </div>
+            <div class="panel-body">
+                @if (!string.IsNullOrWhiteSpace(Model.Knowledge?.ExternalCareGuide))
+                {
+                    <div class="care-guide-text">@Model.Knowledge.ExternalCareGuide</div>
+                }
+                else if (Model.Knowledge != null && !Model.Knowledge.IsSparse)
+                {
+                    <div class="care-facts">
+                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.LightRequirement)) { <div><span>光照</span>@Model.Knowledge.LightRequirement</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.WaterRequirement)) { <div><span>澆水</span>@Model.Knowledge.WaterRequirement</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.SoilRequirement)) { <div><span>土壤</span>@Model.Knowledge.SoilRequirement</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.FertilizerRequirement)) { <div><span>施肥</span>@Model.Knowledge.FertilizerRequirement</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.TemperatureRange)) { <div><span>溫度</span>@Model.Knowledge.TemperatureRange</div> }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted mb-3">尚無官方說明，請在右側同步外部資料。</p>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(Model.Description))
+                {
+                    <hr class="my-3" />
+                    <div class="small text-muted mb-1">我的備註</div>
+                    <p class="mb-0">@Model.Description</p>
+                }
+            </div>
+        </section>
+    </div>
+
+    <div class="col-lg-5">
+        <section class="panel mb-4">
+            <div class="panel-header"><strong>同步官方資料</strong></div>
+            <div class="panel-body">
+                <form asp-action="SyncKnowledge" asp-route-id="@Model.Id" method="post">
+                    @Html.AntiForgeryToken()
+                    <label asp-for="SyncKnowledge.SpeciesKeyword" class="form-label"></label>
+                    <input asp-for="SyncKnowledge.SpeciesKeyword" class="form-control mb-2" placeholder="例如：玉露錦" />
+                    <button type="submit" class="btn btn-plant-primary btn-sm w-100">同步外部 API</button>
+                </form>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header"><strong>個人化設定</strong></div>
+            <div class="panel-body">
+                <form asp-action="SaveProfile" asp-route-id="@Model.Id" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label asp-for="Profile.WateringIntervalDays" class="form-label small"></label>
+                            <input asp-for="Profile.WateringIntervalDays" class="form-control form-control-sm" type="number" min="1" />
+                        </div>
+                        <div class="col-6">
+                            <label asp-for="Profile.FertilizingIntervalDays" class="form-label small"></label>
+                            <input asp-for="Profile.FertilizingIntervalDays" class="form-control form-control-sm" type="number" min="1" />
+                        </div>
+                        <div class="col-12">
+                            <label asp-for="Profile.PersonalCareNotes" class="form-label small"></label>
+                            <input asp-for="Profile.PersonalCareNotes" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-success btn-sm mt-3">儲存設定</button>
+                </form>
+            </div>
+        </section>
+    </div>
+</div>
+
+<section class="panel mb-4">
+    <div class="panel-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <strong>我的植栽照片</strong>
+        <span class="text-muted small">上傳照片 + 備註，可針對每張執行 AI 分析</span>
+    </div>
+    <div class="panel-body">
+        <form asp-action="UploadPhoto" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" class="upload-panel mb-4">
+            @Html.AntiForgeryToken()
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">選擇照片</label>
+                    <input type="file" name="photoFile" accept="image/*" class="form-control" required />
+                </div>
+                <div class="col-md-5">
+                    <label asp-for="NewPhoto.Note" class="form-label"></label>
+                    <input asp-for="NewPhoto.Note" class="form-control" placeholder="例如：葉片發黃、疑似缺肥、新長側芽" />
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check mb-2">
+                        <input asp-for="NewPhoto.SetAsCover" class="form-check-input" />
+                        <label asp-for="NewPhoto.SetAsCover" class="form-check-label"></label>
+                    </div>
+                    <button type="submit" class="btn btn-plant-primary w-100">上傳照片</button>
+                </div>
+            </div>
+        </form>
+
+        @if (!Model.Photos.Any())
+        {
+            <p class="text-muted mb-0">尚無照片。上傳後可在下方查看，並針對每張照片執行 AI 草況分析。</p>
+        }
+        else
+        {
+            <div class="photo-grid">
+                @foreach (var photo in Model.Photos)
+                {
+                    <article class="photo-card">
+                        <div class="photo-card-image">
+                            <img src="@photo.PublicPath" alt="植栽照片" />
+                            @if (photo.IsCover)
+                            {
+                                <span class="photo-cover-badge">封面</span>
+                            }
+                        </div>
+                        <div class="photo-card-body">
+                            <div class="photo-card-note">
+                                @(string.IsNullOrWhiteSpace(photo.Note) ? "（無備註）" : photo.Note)
+                            </div>
+                            <div class="small text-muted mb-2">@photo.CreatedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</div>
+
+                            @if (photo.LatestAnalysis != null)
+                            {
+                                <div class="photo-analysis-result">
+                                    <div class="fw-semibold small mb-1">
+                                        AI 分析
+                                        @if (photo.LatestAnalysis.HealthScore.HasValue)
+                                        {
+                                            <span class="health-badge health-badge-sm health-badge-@(photo.LatestAnalysis.HealthScore >= 70 ? "good" : photo.LatestAnalysis.HealthScore >= 50 ? "warn" : "bad")">
+                                                @photo.LatestAnalysis.HealthScore
+                                            </span>
+                                        }
+                                    </div>
+                                    <p class="small mb-0">@photo.LatestAnalysis.Summary</p>
+                                </div>
+                            }
+
+                            <div class="photo-card-actions">
+                                <button type="button" class="btn btn-sm btn-plant-primary analyze-photo-btn" data-plant-id="@Model.Id" data-image-id="@photo.Id">
+                                    🤖 AI 分析
+                                </button>
+                                @if (!photo.IsCover)
+                                {
+                                    <form asp-action="SetCoverPhoto" asp-route-id="@Model.Id" asp-route-imageId="@photo.Id" method="post" class="d-inline">
+                                        @Html.AntiForgeryToken()
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">設封面</button>
+                                    </form>
+                                }
+                                <form asp-action="DeletePhoto" asp-route-id="@Model.Id" asp-route-imageId="@photo.Id" method="post" class="d-inline" onsubmit="return confirm('確定刪除此照片？');">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">刪除</button>
+                                </form>
+                            </div>
+                            <div class="photo-analysis-status small text-muted d-none" data-image-id="@photo.Id"></div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+<section class="panel mb-4">
+    <div class="panel-header"><strong>照護紀錄</strong></div>
+    <div class="panel-body">
+        @if (!string.IsNullOrWhiteSpace(fertilizerHint))
+        {
+            <div class="fertilizer-hint mb-3">
+                <strong>施肥參考：</strong>@fertilizerHint
+            </div>
+        }
+
+        <form asp-action="CreateCareRecord" asp-route-id="@Model.Id" method="post" class="upload-panel mb-4">
+            @Html.AntiForgeryToken()
+            <div class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label asp-for="NewCareRecord.RecordDate" class="form-label"></label>
+                    <input asp-for="NewCareRecord.RecordDate" class="form-control" type="date" />
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="NewCareRecord.CareType" class="form-label"></label>
+                    <select asp-for="NewCareRecord.CareType" class="form-select" asp-items="Html.GetEnumSelectList<Midnight.EC.Plant.WEB.Models.Enums.CareRecordType>()"></select>
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="NewCareRecord.NumericValue" class="form-label"></label>
+                    <input asp-for="NewCareRecord.NumericValue" class="form-control" type="number" step="0.1" />
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="NewCareRecord.Unit" class="form-label"></label>
+                    <input asp-for="NewCareRecord.Unit" class="form-control" placeholder="ml / 倍數" />
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="NewCareRecord.Note" class="form-label"></label>
+                    <input asp-for="NewCareRecord.Note" class="form-control" placeholder="例如：薄肥勤施、氮磷鉀均衡" />
+                </div>
+                <div class="col-md-1">
+                    <button type="submit" class="btn btn-plant-primary w-100">新增</button>
+                </div>
+            </div>
+        </form>
+
+        @if (Model.CareRecords.Any())
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>類型</th>
+                            <th>內容</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var record in Model.CareRecords.Take(20))
+                        {
+                            <tr>
+                                <td>@record.RecordDate.ToString("yyyy/MM/dd")</td>
+                                <td>@record.CareType</td>
+                                <td>@record.DisplayValue</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <p class="text-muted mb-0">尚無照護紀錄。</p>
+        }
+    </div>
+</section>
+
+@section Scripts {
+    <script>
+        (function () {
+            document.querySelectorAll('.analyze-photo-btn').forEach(function (btn) {
+                btn.addEventListener('click', async function () {
+                    const plantId = btn.dataset.plantId;
+                    const imageId = btn.dataset.imageId;
+                    const statusEl = document.querySelector('.photo-analysis-status[data-image-id="' + imageId + '"]');
+                    btn.disabled = true;
+                    if (statusEl) {
+                        statusEl.classList.remove('d-none');
+                        statusEl.textContent = 'AI 分析中，請稍候…';
+                    }
+
+                    const response = await fetch('/Plant/AnalyzePhoto?id=' + plantId + '&imageId=' + imageId, { method: 'POST' });
+                    if (!response.ok) {
+                        if (statusEl) statusEl.textContent = '分析啟動失敗。';
+                        btn.disabled = false;
+                        return;
+                    }
+
+                    const job = await response.json();
+                    const timer = setInterval(async function () {
+                        const statusResponse = await fetch('/Plant/AnalysisStatus/' + plantId + '?jobId=' + job.id);
+                        if (!statusResponse.ok) return;
+                        const status = await statusResponse.json();
+                        if (status.status === 2) {
+                            clearInterval(timer);
+                            window.location.reload();
+                        } else if (status.status === 3) {
+                            clearInterval(timer);
+                            if (statusEl) statusEl.textContent = status.errorMessage || 'AI 分析失敗。';
+                            btn.disabled = false;
+                        }
+                    }, 2000);
+                });
+            });
+        })();
+    </script>
+}

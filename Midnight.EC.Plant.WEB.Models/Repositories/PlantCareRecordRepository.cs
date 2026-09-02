@@ -27,6 +27,24 @@ public class PlantCareRecordRepository : IPlantCareRecordRepository
             .OrderBy(r => r.RecordDate)
             .ToListAsync(cancellationToken);
 
+    public async Task<Dictionary<int, DateTime>> GetLastWateringDatesAsync(IEnumerable<int> plantIds, CancellationToken cancellationToken = default)
+    {
+        var idList = plantIds.ToList();
+        if (idList.Count == 0)
+        {
+            return [];
+        }
+
+        var records = await _context.PlantCareRecords
+            .AsNoTracking()
+            .Where(r => idList.Contains(r.PlantId) && r.CareType == Enums.CareRecordType.Watering)
+            .GroupBy(r => r.PlantId)
+            .Select(g => new { PlantId = g.Key, LastDate = g.Max(r => r.RecordDate) })
+            .ToListAsync(cancellationToken);
+
+        return records.ToDictionary(r => r.PlantId, r => r.LastDate);
+    }
+
     public async Task AddAsync(PlantCareRecord record, CancellationToken cancellationToken = default) =>
         await _context.PlantCareRecords.AddAsync(record, cancellationToken);
 

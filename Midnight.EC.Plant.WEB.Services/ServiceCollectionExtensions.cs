@@ -14,7 +14,6 @@ using Midnight.EC.Plant.WEB.Services.PlantAnalysis;
 using Midnight.EC.Plant.WEB.Services.PlantDiary;
 using Midnight.EC.Plant.WEB.Services.PlantKnowledge;
 using Midnight.EC.Plant.WEB.Services.PlantCare;
-using Midnight.EC.Plant.WEB.Services.PlantComparison;
 using Midnight.EC.Plant.WEB.Services.PlantProfile;
 using Midnight.EC.Plant.WEB.Services.PlantReminder;
 using Midnight.EC.Plant.WEB.Services.PlantSource;
@@ -71,7 +70,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPlantProfileService, PlantProfileService>();
         services.AddScoped<IPlantReminderService, PlantReminderService>();
         services.AddScoped<IPlantTimelineService, PlantTimelineService>();
-        services.AddScoped<IPlantComparisonService, PlantComparisonService>();
         services.AddScoped<IExternalPlantApiService, ExternalPlantApiService>();
         services.AddScoped<IImageStorageService, LocalImageStorageService>();
         services.AddScoped<IAIAgentService, OpenAIPlantAgentService>();

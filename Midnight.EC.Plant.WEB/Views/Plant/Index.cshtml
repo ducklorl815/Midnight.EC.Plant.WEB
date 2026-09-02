@@ -1,73 +1,100 @@
-@model Midnight.EC.Plant.WEB.ViewModels.PlantListViewModel
-@{
-    ViewData["Title"] = "我的植栽";
-}
-
-<div class="page-header d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <div>
-        <h1 class="page-title mb-1">我的植栽</h1>
-        <p class="page-subtitle mb-0">管理您的植物、照片紀錄與 AI 草況分析</p>
-    </div>
-    <div class="d-flex gap-2">
-        <a asp-action="Compare" class="btn btn-outline-secondary">多植物比較</a>
-        <a asp-action="Create" class="btn btn-plant-primary">+ 新增植物</a>
-    </div>
-</div>
-
-@if (Model.TotalActiveReminders > 0)
-{
-    <div class="alert @(Model.TotalOverdueReminders > 0 ? "alert-warning" : "alert-info") mb-4">
-        目前有 <strong>@Model.TotalActiveReminders</strong> 則待處理提醒
-        @if (Model.TotalOverdueReminders > 0)
-        {
-            <span>（其中 <strong>@Model.TotalOverdueReminders</strong> 則已逾期）</span>
-        }
-    </div>
-}
-
-@if (!Model.Plants.Any())
-{
-    <div class="empty-state">
-        <div class="empty-state-icon">🌱</div>
-        <h2>尚未建立任何植物</h2>
-        <p class="text-muted">新增第一盆植栽，開始記錄照片與照護。</p>
-        <a asp-action="Create" class="btn btn-plant-primary">新增植物</a>
-    </div>
-}
-else
-{
-    <div class="plant-grid">
-        @foreach (var plant in Model.Plants)
-        {
-            <a asp-action="Details" asp-route-id="@plant.Id" class="plant-card">
-                <div class="plant-card-cover">
-                    @if (!string.IsNullOrWhiteSpace(plant.CoverImagePath))
-                    {
-                        <img src="@plant.CoverImagePath" alt="@plant.Name" />
-                    }
-                    else
-                    {
-                        <div class="plant-card-cover-placeholder">🌿</div>
-                    }
-                </div>
-                <div class="plant-card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
-                        <h3 class="plant-card-title">@plant.Name</h3>
-                        @if (plant.LatestHealthScore.HasValue)
-                        {
-                            <span class="health-badge health-badge-sm health-badge-@(plant.LatestHealthScore >= 70 ? "good" : plant.LatestHealthScore >= 50 ? "warn" : "bad")">
-                                @plant.LatestHealthScore
-                            </span>
-                        }
-                    </div>
-                    <p class="plant-card-meta">@plant.SpeciesName</p>
-                    <p class="plant-card-location">@(plant.Location ?? "未設定位置")</p>
-                    @if (plant.ActiveReminderCount > 0)
-                    {
-                        <div class="plant-card-reminder">🔔 @plant.ActiveReminderCount 則提醒</div>
-                    }
-                </div>
-            </a>
-        }
-    </div>
-}
+@model Midnight.EC.Plant.WEB.ViewModels.PlantListViewModel
+@{
+    ViewData["Title"] = "我的植栽";
+}
+
+<div class="page-header d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div>
+        <h1 class="page-title mb-1">我的植栽</h1>
+        <p class="page-subtitle mb-0">管理您的植物、照片紀錄與 AI 草況分析</p>
+    </div>
+    <div>
+        <a asp-action="Create" class="btn btn-plant-primary">+ 新增植物</a>
+    </div>
+</div>
+
+@if (Model.TotalActiveReminders > 0)
+{
+    <div class="alert @(Model.TotalOverdueReminders > 0 ? "alert-warning" : "alert-info") mb-4">
+        目前有 <strong>@Model.TotalActiveReminders</strong> 則待處理提醒
+        @if (Model.TotalOverdueReminders > 0)
+        {
+            <span>（其中 <strong>@Model.TotalOverdueReminders</strong> 則已逾期）</span>
+        }
+    </div>
+}
+
+@if (!Model.Plants.Any())
+{
+    <div class="empty-state">
+        <div class="empty-state-icon">🌱</div>
+        <h2>尚未建立任何植物</h2>
+        <p class="text-muted">新增第一盆植栽，開始記錄照片與照護。</p>
+        <a asp-action="Create" class="btn btn-plant-primary">新增植物</a>
+    </div>
+}
+else
+{
+    <div class="plant-grid">
+        @foreach (var plant in Model.Plants)
+        {
+            <article class="plant-card">
+                <a asp-action="Details" asp-route-id="@plant.Id" class="plant-card-link">
+                    <div class="plant-card-cover">
+                        @if (!string.IsNullOrWhiteSpace(plant.CoverImagePath))
+                        {
+                            <img src="@plant.CoverImagePath" alt="@plant.DisplayName" />
+                        }
+                        else
+                        {
+                            <div class="plant-card-cover-placeholder">🌿</div>
+                        }
+                    </div>
+                    <div class="plant-card-body">
+                        <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                            <h3 class="plant-card-title">@plant.DisplayName</h3>
+                            @if (plant.LatestHealthScore.HasValue)
+                            {
+                                <span class="health-badge health-badge-sm health-badge-@(plant.LatestHealthScore >= 70 ? "good" : plant.LatestHealthScore >= 50 ? "warn" : "bad")">
+                                    @plant.LatestHealthScore
+                                </span>
+                            }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(plant.SpeciesChineseName))
+                        {
+                            <p class="plant-card-meta">@plant.SpeciesChineseName</p>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(plant.SpeciesName))
+                        {
+                            <p class="plant-card-meta">@plant.SpeciesName</p>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(plant.SpeciesScientificName))
+                        {
+                            <p class="plant-card-scientific">@plant.SpeciesScientificName</p>
+                        }
+                        <p class="plant-card-location">@(plant.Location ?? "未設定位置")</p>
+                        @if (plant.DaysSinceLastWatering.HasValue)
+                        {
+                            <div class="plant-card-watering">💧 已過 @plant.DaysSinceLastWatering 天</div>
+                        }
+                        else
+                        {
+                            <div class="plant-card-watering plant-card-watering-none">💧 尚無澆水紀錄</div>
+                        }
+                        @if (plant.ActiveReminderCount > 0)
+                        {
+                            <div class="plant-card-reminder">🔔 @plant.ActiveReminderCount 則提醒</div>
+                        }
+                    </div>
+                </a>
+                <div class="plant-card-footer">
+                    <a asp-action="Edit" asp-route-id="@plant.Id" class="btn btn-sm btn-outline-secondary">編輯</a>
+                    <form asp-action="Delete" asp-route-id="@plant.Id" method="post" class="d-inline" onsubmit="return confirm('確定刪除此植栽？');">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-sm btn-outline-danger">刪除</button>
+                    </form>
+                </div>
+            </article>
+        }
+    </div>
+}

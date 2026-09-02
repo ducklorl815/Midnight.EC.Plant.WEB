@@ -66,22 +66,36 @@ public class PlantReminderService : IPlantReminderService
         var reminders = await _reminderRepository.GetActiveForPlantsAsync(plantIds, cancellationToken);
         var analyses = await LoadLatestAnalysesAsync(plantIds, cancellationToken);
         var covers = await LoadCoverPathsAsync(plantIds, cancellationToken);
+        var lastWateringDates = await _careRepository.GetLastWateringDatesAsync(plantIds, cancellationToken);
+        var today = DateTime.UtcNow.Date;
 
         return plants.Select(plant =>
         {
             var plantReminders = reminders.Where(r => r.PlantId == plant.Id).ToList();
-            var today = DateTime.UtcNow.Date;
+            lastWateringDates.TryGetValue(plant.Id, out var lastWateringDate);
+            int? daysSinceWatering = lastWateringDates.ContainsKey(plant.Id)
+                ? (today - lastWateringDate.Date).Days
+                : null;
+            var chineseName = plant.Species?.ChineseName;
+            var scientificName = plant.Species?.ScientificName;
+
             return new PlantDashboardItemDto
             {
                 Id = plant.Id,
                 Name = plant.Name,
-                SpeciesName = plant.Species?.ChineseName ?? plant.Species?.CommonName ?? plant.Species?.ScientificName,
+                NickName = plant.NickName,
+                DisplayName = !string.IsNullOrWhiteSpace(plant.NickName) ? plant.NickName : plant.Name,
+                SpeciesName = chineseName ?? plant.Species?.CommonName ?? scientificName,
+                SpeciesChineseName = chineseName,
+                SpeciesScientificName = scientificName,
                 Location = plant.Location,
                 CoverImagePath = covers.GetValueOrDefault(plant.Id),
                 LatestHealthScore = analyses.GetValueOrDefault(plant.Id)?.HealthScore,
                 ActiveReminderCount = plantReminders.Count,
                 OverdueReminderCount = plantReminders.Count(r => r.DueDate.Date < today),
-                TopReminders = plantReminders.Take(3).Select(r => r.ToDto(plant.Name)).ToList()
+                TopReminders = plantReminders.Take(3).Select(r => r.ToDto(plant.Name)).ToList(),
+                LastWateringDate = lastWateringDates.ContainsKey(plant.Id) ? lastWateringDate : null,
+                DaysSinceLastWatering = daysSinceWatering
             };
         }).ToList();
     }

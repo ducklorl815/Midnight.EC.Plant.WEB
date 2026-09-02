@@ -30,6 +30,7 @@ public class PlantSourceDetailDto
     public int Id { get; set; }
     public int SpeciesId { get; set; }
     public string? SpeciesName { get; set; }
+    public List<string> LinkedSpeciesNames { get; set; } = [];
     public SourceType SourceType { get; set; }
     public string? Title { get; set; }
     public string Url { get; set; } = string.Empty;
@@ -60,6 +61,7 @@ public class PlantSourceListItemDto
     public int Id { get; set; }
     public int SpeciesId { get; set; }
     public string? SpeciesName { get; set; }
+    public List<string> LinkedSpeciesNames { get; set; } = [];
     public string? Title { get; set; }
     public string Url { get; set; } = string.Empty;
     public SourceType SourceType { get; set; }

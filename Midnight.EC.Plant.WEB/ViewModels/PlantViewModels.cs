@@ -14,13 +14,18 @@ public class PlantDashboardCardViewModel
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string? NickName { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
     public string? SpeciesName { get; set; }
+    public string? SpeciesChineseName { get; set; }
+    public string? SpeciesScientificName { get; set; }
     public string? Location { get; set; }
     public string? CoverImagePath { get; set; }
     public int? LatestHealthScore { get; set; }
     public int ActiveReminderCount { get; set; }
     public int OverdueReminderCount { get; set; }
     public List<PlantReminderItemViewModel> TopReminders { get; set; } = [];
+    public int? DaysSinceLastWatering { get; set; }
 }
 
 public class PlantListItemViewModel
@@ -49,6 +54,35 @@ public class CreatePlantViewModel
 
     [Display(Name = "備註")]
     public string? Description { get; set; }
+
+    [Display(Name = "幼苗時間")]
+    [DataType(DataType.Date)]
+    public DateTime? StartDate { get; set; }
+}
+
+public class EditPlantViewModel
+{
+    public int Id { get; set; }
+
+    [Required(ErrorMessage = "請輸入植物名稱")]
+    [Display(Name = "我的植物名稱")]
+    public string Name { get; set; } = string.Empty;
+
+    [Display(Name = "暱稱")]
+    public string? NickName { get; set; }
+
+    [Display(Name = "位置")]
+    public string? Location { get; set; }
+
+    [Display(Name = "備註")]
+    public string? Description { get; set; }
+
+    [Display(Name = "幼苗時間")]
+    [DataType(DataType.Date)]
+    public DateTime? StartDate { get; set; }
+
+    public string? SpeciesName { get; set; }
+    public string? SpeciesScientificName { get; set; }
 }
 
 public class PlantDetailViewModel
@@ -59,6 +93,10 @@ public class PlantDetailViewModel
     public string? Location { get; set; }
     public string? Description { get; set; }
     public string? SpeciesName { get; set; }
+    public string? SpeciesChineseName { get; set; }
+    public string? SpeciesScientificName { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+    public DateTime? StartDate { get; set; }
     public string? CoverImagePath { get; set; }
     public int? LatestHealthScore { get; set; }
     public PlantKnowledgeViewModel? Knowledge { get; set; }
@@ -66,6 +104,7 @@ public class PlantDetailViewModel
     public List<PlantAnalysisItemViewModel> Analyses { get; set; } = [];
     public List<PlantCareRecordItemViewModel> CareRecords { get; set; } = [];
     public PlantTrendViewModel Trend { get; set; } = new();
+    public int? DaysSinceLastWatering { get; set; }
     public CreateCareRecordViewModel NewCareRecord { get; set; } = new();
     public CreatePhotoViewModel NewPhoto { get; set; } = new();
     public PlantProfileViewModel Profile { get; set; } = new();
@@ -91,6 +130,12 @@ public class CreatePhotoViewModel
 
     [Display(Name = "設為封面")]
     public bool SetAsCover { get; set; }
+}
+
+public class UpdatePhotoNoteViewModel
+{
+    [Display(Name = "備註")]
+    public string? Note { get; set; }
 }
 
 public class PlantKnowledgeViewModel

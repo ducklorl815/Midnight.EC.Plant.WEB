@@ -6,7 +6,17 @@
 <div class="mb-3"><a asp-action="Index">&larr; 返回列表</a></div>
 
 <h1 class="mb-1">@(Model.Title ?? "外部來源")</h1>
-<p class="text-muted">@Model.SpeciesName · @Model.SourceType · 可靠度 @Model.ReliabilityLevel</p>
+<p class="text-muted">
+    @if (Model.LinkedSpeciesNames.Any())
+    {
+        <span>@string.Join("、", Model.LinkedSpeciesNames)</span>
+    }
+    else
+    {
+        <span>@(Model.SpeciesName ?? "未關聯物種")</span>
+    }
+    · @Model.SourceType · 可靠度 @Model.ReliabilityLevel
+</p>
 
 @if (TempData["Success"] is string success)
 {

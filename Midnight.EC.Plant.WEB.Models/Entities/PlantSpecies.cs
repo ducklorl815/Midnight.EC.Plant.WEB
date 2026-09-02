@@ -18,5 +18,6 @@ public class PlantSpecies
     public PlantKnowledge? Knowledge { get; set; }
     public ICollection<Plant> Plants { get; set; } = [];
     public ICollection<PlantSource> Sources { get; set; } = [];
+    public ICollection<PlantSourceSpecies> SourceLinks { get; set; } = [];
     public ICollection<PlantKnowledgeSyncLog> SyncLogs { get; set; } = [];
 }

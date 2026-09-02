@@ -51,16 +51,16 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcSG9tZVxQcml2YWN5LmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
-[D:/Project/Midnight.EC.Plant.WEB/Midnight.EC.Plant.WEB/Views/Plant/Compare.cshtml]
-build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUGxhbnRcQ29tcGFyZS5jc2h0bWw=
-build_metadata.AdditionalFiles.CssScope = 
-
 [D:/Project/Midnight.EC.Plant.WEB/Midnight.EC.Plant.WEB/Views/Plant/Create.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUGxhbnRcQ3JlYXRlLmNzaHRtbA==
 build_metadata.AdditionalFiles.CssScope = 
 
 [D:/Project/Midnight.EC.Plant.WEB/Midnight.EC.Plant.WEB/Views/Plant/Details.cshtml]
 build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUGxhbnRcRGV0YWlscy5jc2h0bWw=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/Project/Midnight.EC.Plant.WEB/Midnight.EC.Plant.WEB/Views/Plant/Edit.cshtml]
+build_metadata.AdditionalFiles.TargetPath = Vmlld3NcUGxhbnRcRWRpdC5jc2h0bWw=
 build_metadata.AdditionalFiles.CssScope = 
 
 [D:/Project/Midnight.EC.Plant.WEB/Midnight.EC.Plant.WEB/Views/Plant/Index.cshtml]

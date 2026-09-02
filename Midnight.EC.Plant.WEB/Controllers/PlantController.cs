@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Midnight.EC.Plant.WEB.Models.AI;
 using Midnight.EC.Plant.WEB.Models.DTOs;
 using Midnight.EC.Plant.WEB.Models.Enums;
+using Midnight.EC.Plant.WEB.Models.Extensions;
 using Midnight.EC.Plant.WEB.Models.External;
 using Midnight.EC.Plant.WEB.Services.External;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
@@ -21,7 +22,6 @@ public class PlantController : Controller
     private readonly IPlantProfileService _profileService;
     private readonly IPlantReminderService _reminderService;
     private readonly IPlantTimelineService _timelineService;
-    private readonly IPlantComparisonService _comparisonService;
     private readonly IPlantKnowledgeService _knowledgeService;
     private readonly IImageStorageService _imageStorageService;
     private readonly ILogger<PlantController> _logger;
@@ -35,7 +35,6 @@ public class PlantController : Controller
         IPlantProfileService profileService,
         IPlantReminderService reminderService,
         IPlantTimelineService timelineService,
-        IPlantComparisonService comparisonService,
         IPlantKnowledgeService knowledgeService,
         IImageStorageService imageStorageService,
         ILogger<PlantController> logger)
@@ -48,7 +47,6 @@ public class PlantController : Controller
         _profileService = profileService;
         _reminderService = reminderService;
         _timelineService = timelineService;
-        _comparisonService = comparisonService;
         _knowledgeService = knowledgeService;
         _imageStorageService = imageStorageService;
         _logger = logger;
@@ -64,12 +62,17 @@ public class PlantController : Controller
             {
                 Id = p.Id,
                 Name = p.Name,
+                NickName = p.NickName,
+                DisplayName = p.DisplayName,
                 SpeciesName = p.SpeciesName,
+                SpeciesChineseName = p.SpeciesChineseName,
+                SpeciesScientificName = p.SpeciesScientificName,
                 Location = p.Location,
                 CoverImagePath = p.CoverImagePath,
                 LatestHealthScore = p.LatestHealthScore,
                 ActiveReminderCount = p.ActiveReminderCount,
                 OverdueReminderCount = p.OverdueReminderCount,
+                DaysSinceLastWatering = p.DaysSinceLastWatering,
                 TopReminders = p.TopReminders.Select(MapReminder).ToList()
             }).ToList(),
             TotalActiveReminders = dashboard.Sum(p => p.ActiveReminderCount),
@@ -102,6 +105,7 @@ public class PlantController : Controller
                 model.NickName,
                 model.Location,
                 model.Description,
+                model.StartDate,
                 cancellationToken);
 
             return RedirectToAction(nameof(Details), new { id = plant.Id });
@@ -115,29 +119,24 @@ public class PlantController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Compare(int[]? plantIds, CancellationToken cancellationToken)
+    public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
     {
-        var plants = await _plantService.GetAllAsync(cancellationToken);
-        var selectedIds = plantIds?.Distinct().ToArray() ?? [];
-        PlantComparisonResultViewModel? result = null;
-
-        if (selectedIds.Length >= 2)
+        var plant = await _plantService.GetByIdAsync(id, cancellationToken);
+        if (plant == null)
         {
-            var comparison = await _comparisonService.CompareAsync(selectedIds, 30, cancellationToken);
-            result = MapComparison(comparison);
+            return NotFound();
         }
 
-        var model = new PlantCompareViewModel
+        var model = new EditPlantViewModel
         {
-            PlantOptions = plants.Select(p => new PlantCompareOptionViewModel
-            {
-                Id = p.Id,
-                Name = p.Name,
-                SpeciesName = p.Species?.ChineseName ?? p.Species?.CommonName ?? p.Species?.ScientificName,
-                IsSelected = selectedIds.Contains(p.Id)
-            }).ToList(),
-            SelectedPlantIds = selectedIds,
-            Result = result
+            Id = plant.Id,
+            Name = plant.Name,
+            NickName = plant.NickName,
+            Location = plant.Location,
+            Description = plant.Description,
+            StartDate = plant.StartDate?.ToLocalTime().Date,
+            SpeciesName = plant.Species?.ChineseName ?? plant.Species?.CommonName,
+            SpeciesScientificName = plant.Species?.ScientificName
         };
 
         return View(model);
@@ -145,9 +144,57 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public IActionResult Compare(PlantCompareViewModel model)
+    public async Task<IActionResult> Edit(int id, EditPlantViewModel model, CancellationToken cancellationToken)
     {
-        return RedirectToAction(nameof(Compare), new { plantIds = model.SelectedPlantIds });
+        if (id != model.Id)
+        {
+            return BadRequest();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        try
+        {
+            await _plantService.UpdateAsync(
+                id,
+                model.Name,
+                model.NickName,
+                model.Location,
+                model.Description,
+                model.StartDate,
+                cancellationToken);
+
+            TempData["Success"] = "植栽資料已更新。";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Update plant failed for {PlantId}", id);
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return View(model);
+        }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _plantService.DeleteAsync(id, cancellationToken);
+            TempData["Success"] = "植栽已刪除。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Delete plant failed for {PlantId}", id);
+            TempData["Error"] = ex.Message;
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpGet]
@@ -199,9 +246,13 @@ public class PlantController : Controller
             Id = plant.Id,
             Name = plant.Name,
             NickName = plant.NickName,
+            DisplayName = !string.IsNullOrWhiteSpace(plant.NickName) ? plant.NickName! : plant.Name,
             Location = plant.Location,
             Description = plant.Description,
+            StartDate = plant.StartDate,
             SpeciesName = plant.Species?.ChineseName ?? plant.Species?.CommonName ?? plant.Species?.ScientificName,
+            SpeciesChineseName = plant.Species?.ChineseName,
+            SpeciesScientificName = plant.Species?.ScientificName,
             CoverImagePath = cover != null ? _imageStorageService.GetPublicPath(cover.StoragePath) : null,
             LatestHealthScore = latestAnalysis?.HealthScore,
             Knowledge = knowledgeVm,
@@ -232,6 +283,9 @@ public class PlantController : Controller
                 DisplayValue = FormatCareDisplay(r.CareType, r.NumericValue, r.Unit, r.Note)
             }).ToList(),
             Trend = MapTrend(trend),
+            DaysSinceLastWatering = trend.LastWateringDate.HasValue
+                ? (DateTime.UtcNow.Date - trend.LastWateringDate.Value.Date).Days
+                : null,
             Profile = MapProfile(profile),
             Reminders = reminders.Select(MapReminder).ToList(),
             NewCareRecord = new CreateCareRecordViewModel(),
@@ -304,7 +358,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UploadPhoto(int id, CreatePhotoViewModel model, IFormFile? photoFile, CancellationToken cancellationToken)
+    public async Task<IActionResult> UploadPhoto(int id, [Bind(Prefix = "NewPhoto")] CreatePhotoViewModel model, IFormFile? photoFile, CancellationToken cancellationToken)
     {
         if (photoFile == null || photoFile.Length == 0)
         {
@@ -332,6 +386,15 @@ public class PlantController : Controller
     {
         await _imageService.SetCoverAsync(id, imageId, cancellationToken);
         TempData["Success"] = "已更新封面照片。";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdatePhotoNote(int id, int imageId, UpdatePhotoNoteViewModel model, CancellationToken cancellationToken)
+    {
+        await _imageService.UpdateNoteAsync(imageId, model.Note, cancellationToken);
+        TempData["Success"] = "照片備註已更新。";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -562,26 +625,6 @@ public class PlantController : Controller
             PersonalCareNotes = profile.PersonalCareNotes
         };
 
-    private static PlantComparisonResultViewModel MapComparison(PlantComparisonResultDto comparison) => new()
-    {
-        Items = comparison.Items.Select(i => new PlantComparisonRowViewModel
-        {
-            PlantId = i.PlantId,
-            Name = i.Name,
-            SpeciesName = i.SpeciesName,
-            Location = i.Location,
-            LatestHealthScore = i.LatestHealthScore,
-            LastWateringDate = i.LastWateringDate,
-            WateringCount30Days = i.WateringCount30Days,
-            AvgTemperature = i.AvgTemperature,
-            AvgHumidity = i.AvgHumidity,
-            GrowthTrend = i.GrowthTrend,
-            ActiveReminderCount = i.ActiveReminderCount
-        }).ToList(),
-        HealthScoreLabelsJson = JsonSerializer.Serialize(comparison.HealthScoreLabels),
-        HealthScoresJson = JsonSerializer.Serialize(comparison.HealthScores)
-    };
-
     private static PlantTrendViewModel MapTrend(PlantTrendDto trend) => new()
     {
         LabelsJson = JsonSerializer.Serialize(trend.Labels),
@@ -601,7 +644,7 @@ public class PlantController : Controller
             return $"{value}{unit}";
         }
 
-        return note ?? type.ToString();
+        return note ?? type.GetDisplayName();
     }
 
     private static string? DefaultUnit(CareRecordType type) => type switch

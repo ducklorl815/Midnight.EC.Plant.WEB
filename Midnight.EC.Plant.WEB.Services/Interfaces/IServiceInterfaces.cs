@@ -8,8 +8,10 @@ public interface IPlantService
 {
     Task<List<PlantDto>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<PlantDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
-    Task<PlantDto> CreateAsync(string name, string? speciesKeyword, string? nickName, string? location, string? description, CancellationToken cancellationToken = default);
-    Task<PlantDto> CreateAsync(string name, string? speciesKeyword, Stream? identificationImage, string? identificationFileName, string? nickName, string? location, string? description, CancellationToken cancellationToken = default);
+    Task<PlantDto> CreateAsync(string name, string? speciesKeyword, string? nickName, string? location, string? description, DateTime? startDate, CancellationToken cancellationToken = default);
+    Task<PlantDto> CreateAsync(string name, string? speciesKeyword, Stream? identificationImage, string? identificationFileName, string? nickName, string? location, string? description, DateTime? startDate, CancellationToken cancellationToken = default);
+    Task<PlantDto> UpdateAsync(int id, string name, string? nickName, string? location, string? description, DateTime? startDate, CancellationToken cancellationToken = default);
+    Task DeleteAsync(int id, CancellationToken cancellationToken = default);
 }
 
 public interface IPlantKnowledgeService
@@ -76,6 +78,7 @@ public interface IPlantImageService
     Task<PlantImageDto?> GetCoverAsync(int plantId, CancellationToken cancellationToken = default);
     Task<PlantImageDto> UploadAsync(int plantId, Stream stream, string fileName, string contentType, string? note, bool setAsCover, CancellationToken cancellationToken = default);
     Task SetCoverAsync(int plantId, int imageId, CancellationToken cancellationToken = default);
+    Task UpdateNoteAsync(int imageId, string? note, CancellationToken cancellationToken = default);
     Task DeleteAsync(int imageId, CancellationToken cancellationToken = default);
 }
 
@@ -84,7 +87,7 @@ public interface IPlantSourceService
     Task<List<PlantSourceListItemDto>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<PlantSourceDetailDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
     Task<ParsedContentDto> ParseUrlAsync(string url, SourceType? sourceType = null, CancellationToken cancellationToken = default);
-    Task<PlantSourceDetailDto> SaveAsync(int speciesId, ParsedContentDto parsed, string? titleOverride, CancellationToken cancellationToken = default);
+    Task<PlantSourceDetailDto> SaveAsync(IEnumerable<int> speciesIds, ParsedContentDto parsed, string? titleOverride, CancellationToken cancellationToken = default);
     Task<PlantSourceDetailDto> ReparseAsync(int sourceId, CancellationToken cancellationToken = default);
 }
 
@@ -112,9 +115,4 @@ public interface IPlantReminderService
 public interface IPlantTimelineService
 {
     Task<List<PlantTimelineEventDto>> GetTimelineAsync(int plantId, int days = 90, CancellationToken cancellationToken = default);
-}
-
-public interface IPlantComparisonService
-{
-    Task<PlantComparisonResultDto> CompareAsync(IEnumerable<int> plantIds, int days = 30, CancellationToken cancellationToken = default);
 }

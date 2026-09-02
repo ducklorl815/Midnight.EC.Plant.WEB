@@ -1,103 +1,110 @@
-@model Midnight.EC.Plant.WEB.ViewModels.AdminPlantSourceCreateViewModel
-@{
-    ViewData["Title"] = "Admin - 新增外部來源";
-}
-
-<h1 class="mb-4">新增外部來源</h1>
-
-@if (TempData["Info"] is string info)
-{
-    <div class="alert alert-info">@info</div>
-}
-
-<form asp-action="Parse" method="post" class="card shadow-sm mb-4">
-    @Html.AntiForgeryToken()
-    <div class="card-body">
-        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-
-        <div class="mb-3">
-            <label asp-for="SpeciesId" class="form-label"></label>
-            <select asp-for="SpeciesId" class="form-select" asp-items="@(new SelectList(Model.SpeciesOptions, "Id", "Name"))">
-                <option value="">-- 請選擇物種 --</option>
-            </select>
-            <span asp-validation-for="SpeciesId" class="text-danger"></span>
-        </div>
-
-        <div class="mb-3">
-            <label asp-for="Url" class="form-label"></label>
-            <input asp-for="Url" class="form-control" placeholder="https://..." />
-            <span asp-validation-for="Url" class="text-danger"></span>
-        </div>
-
-        <div class="row g-3">
-            <div class="col-md-6">
-                <label asp-for="Title" class="form-label"></label>
-                <input asp-for="Title" class="form-control" />
-            </div>
-            <div class="col-md-6">
-                <label asp-for="SourceType" class="form-label"></label>
-                <select asp-for="SourceType" class="form-select" asp-items="Html.GetEnumSelectList<Midnight.EC.Plant.WEB.Models.Enums.SourceType>()">
-                    <option value="">自動判斷</option>
-                </select>
-            </div>
-        </div>
-
-        <button type="submit" class="btn btn-primary mt-3">解析</button>
-        <a asp-action="Index" class="btn btn-secondary mt-3 ms-2">返回</a>
-    </div>
-</form>
-
-@if (Model.Preview != null)
-{
-    <div class="card shadow-sm mb-4">
-        <div class="card-header d-flex justify-content-between">
-            <strong>解析結果</strong>
-            <span class="badge bg-@(Model.Preview.Status == Midnight.EC.Plant.WEB.Models.Enums.SourceContentStatus.Completed ? "success" : "danger")">
-                @Model.Preview.Status
-            </span>
-        </div>
-        <div class="card-body">
-            @if (!string.IsNullOrWhiteSpace(Model.Preview.ErrorMessage))
-            {
-                <div class="alert alert-warning">@Model.Preview.ErrorMessage</div>
-            }
-
-            <dl class="row">
-                <dt class="col-sm-2">標準 URL</dt><dd class="col-sm-10">@Model.Preview.NormalizedUrl</dd>
-                <dt class="col-sm-2">標題</dt><dd class="col-sm-10">@(Model.Preview.Title ?? "-")</dd>
-                <dt class="col-sm-2">作者</dt><dd class="col-sm-10">@(Model.Preview.Author ?? "-")</dd>
-                <dt class="col-sm-2">Parser</dt><dd class="col-sm-10">@Model.Preview.ParserType v@Model.Preview.ParserVersion</dd>
-                <dt class="col-sm-2">可靠度</dt><dd class="col-sm-10">@Model.Preview.ReliabilityLevel</dd>
-                <dt class="col-sm-2">Content Hash</dt><dd class="col-sm-10"><code>@Model.Preview.ContentHash</code></dd>
-                <dt class="col-sm-2">Summary</dt><dd class="col-sm-10">@(Model.Preview.Summary ?? "-")</dd>
-                <dt class="col-sm-2">Keywords</dt><dd class="col-sm-10">@(Model.Preview.Keywords ?? "-")</dd>
-            </dl>
-
-            @if (!string.IsNullOrWhiteSpace(Model.Preview.CleanText))
-            {
-                <h6>CleanText</h6>
-                <pre class="bg-light p-3 rounded small" style="max-height:320px;overflow:auto;">@Model.Preview.CleanText</pre>
-            }
-
-            @if (!Model.Preview.IsExisting)
-            {
-                <form asp-action="Create" method="post" class="mt-3">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" asp-for="SpeciesId" />
-                    <input type="hidden" asp-for="Url" />
-                    <input type="hidden" asp-for="Title" />
-                    <input type="hidden" asp-for="SourceType" />
-                    <button type="submit" class="btn btn-success">儲存來源</button>
-                </form>
-            }
-            else if (Model.Preview.ExistingSourceId.HasValue)
-            {
-                <a asp-action="Details" asp-route-id="@Model.Preview.ExistingSourceId" class="btn btn-outline-primary mt-3">查看既有來源</a>
-            }
-        </div>
-    </div>
-}
-
-@section Scripts {
-    <partial name="_ValidationScriptsPartial" />
-}
+@model Midnight.EC.Plant.WEB.ViewModels.AdminPlantSourceCreateViewModel
+@{
+    ViewData["Title"] = "知識庫 - 新增外部來源";
+}
+
+<h1 class="mb-2">新增外部來源</h1>
+<p class="text-muted mb-4">
+    將 YouTube 影片、文章等外部資料加入物種知識庫。AI 分析您的植栽時，會參考這些內容提供更準確的照護建議。
+    同一支影片若涵蓋多種植物，可一次選取多個物種關聯。
+</p>
+
+@if (TempData["Info"] is string info)
+{
+    <div class="alert alert-info">@info</div>
+}
+
+<form asp-action="Parse" method="post" class="card shadow-sm mb-4">
+    @Html.AntiForgeryToken()
+    <div class="card-body">
+        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+        <div class="mb-3">
+            <label asp-for="SpeciesIds" class="form-label"></label>
+            <select asp-for="SpeciesIds" class="form-select" asp-items="@(new SelectList(Model.SpeciesOptions, "Id", "Name"))" multiple size="6">
+            </select>
+            <div class="form-text">按住 Ctrl（Mac: Cmd）可多選。顯示為中文名，內部以學名對應。</div>
+            <span asp-validation-for="SpeciesIds" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Url" class="form-label"></label>
+            <input asp-for="Url" class="form-control" placeholder="https://..." />
+            <span asp-validation-for="Url" class="text-danger"></span>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="Title" class="form-label"></label>
+                <input asp-for="Title" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="SourceType" class="form-label"></label>
+                <select asp-for="SourceType" class="form-select" asp-items="Html.GetEnumSelectList<Midnight.EC.Plant.WEB.Models.Enums.SourceType>()">
+                    <option value="">自動判斷</option>
+                </select>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary mt-3">解析</button>
+        <a asp-action="Index" class="btn btn-secondary mt-3 ms-2">返回</a>
+    </div>
+</form>
+
+@if (Model.Preview != null)
+{
+    <div class="card shadow-sm mb-4">
+        <div class="card-header d-flex justify-content-between">
+            <strong>解析結果</strong>
+            <span class="badge bg-@(Model.Preview.Status == Midnight.EC.Plant.WEB.Models.Enums.SourceContentStatus.Completed ? "success" : "danger")">
+                @Model.Preview.Status
+            </span>
+        </div>
+        <div class="card-body">
+            @if (!string.IsNullOrWhiteSpace(Model.Preview.ErrorMessage))
+            {
+                <div class="alert alert-warning">@Model.Preview.ErrorMessage</div>
+            }
+
+            @if (Model.Preview.IsExisting)
+            {
+                <div class="alert alert-info">此 URL 已存在於資料庫。儲存時會為選取的物種追加關聯，不會重複建立來源。</div>
+            }
+
+            <dl class="row">
+                <dt class="col-sm-2">標準 URL</dt><dd class="col-sm-10">@Model.Preview.NormalizedUrl</dd>
+                <dt class="col-sm-2">標題</dt><dd class="col-sm-10">@(Model.Preview.Title ?? "-")</dd>
+                <dt class="col-sm-2">作者</dt><dd class="col-sm-10">@(Model.Preview.Author ?? "-")</dd>
+                <dt class="col-sm-2">Parser</dt><dd class="col-sm-10">@Model.Preview.ParserType v@Model.Preview.ParserVersion</dd>
+                <dt class="col-sm-2">可靠度</dt><dd class="col-sm-10">@Model.Preview.ReliabilityLevel</dd>
+                <dt class="col-sm-2">Summary</dt><dd class="col-sm-10">@(Model.Preview.Summary ?? "-")</dd>
+            </dl>
+
+            @if (!string.IsNullOrWhiteSpace(Model.Preview.CleanText))
+            {
+                <h6>CleanText</h6>
+                <pre class="bg-light p-3 rounded small" style="max-height:320px;overflow:auto;">@Model.Preview.CleanText</pre>
+            }
+
+            <form asp-action="Create" method="post" class="mt-3">
+                @Html.AntiForgeryToken()
+                @for (var i = 0; i < Model.SpeciesIds.Length; i++)
+                {
+                    <input type="hidden" asp-for="SpeciesIds[i]" />
+                }
+                <input type="hidden" asp-for="Url" />
+                <input type="hidden" asp-for="Title" />
+                <input type="hidden" asp-for="SourceType" />
+                <button type="submit" class="btn btn-success">@(Model.Preview.IsExisting ? "追加物種關聯" : "儲存來源")</button>
+                @if (Model.Preview.IsExisting && Model.Preview.ExistingSourceId.HasValue)
+                {
+                    <a asp-action="Details" asp-route-id="@Model.Preview.ExistingSourceId" class="btn btn-outline-primary ms-2">查看既有來源</a>
+                }
+            </form>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

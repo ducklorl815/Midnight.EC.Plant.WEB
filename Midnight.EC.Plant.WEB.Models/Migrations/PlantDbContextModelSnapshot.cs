@@ -701,6 +701,21 @@ namespace Midnight.EC.Plant.WEB.Models.Migrations
                     b.ToTable("PlantSourceContents", (string)null);
                 });
 
+            modelBuilder.Entity("Midnight.EC.Plant.WEB.Models.Entities.PlantSourceSpecies", b =>
+                {
+                    b.Property<int>("SourceId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SpeciesId")
+                        .HasColumnType("int");
+
+                    b.HasKey("SourceId", "SpeciesId");
+
+                    b.HasIndex("SpeciesId");
+
+                    b.ToTable("PlantSourceSpecies", (string)null);
+                });
+
             modelBuilder.Entity("Midnight.EC.Plant.WEB.Models.Entities.PlantSpecies", b =>
                 {
                     b.Property<int>("Id")
@@ -930,6 +945,25 @@ namespace Midnight.EC.Plant.WEB.Models.Migrations
                     b.Navigation("Source");
                 });
 
+            modelBuilder.Entity("Midnight.EC.Plant.WEB.Models.Entities.PlantSourceSpecies", b =>
+                {
+                    b.HasOne("Midnight.EC.Plant.WEB.Models.Entities.PlantSource", "Source")
+                        .WithMany("LinkedSpecies")
+                        .HasForeignKey("SourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Midnight.EC.Plant.WEB.Models.Entities.PlantSpecies", "Species")
+                        .WithMany("SourceLinks")
+                        .HasForeignKey("SpeciesId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Source");
+
+                    b.Navigation("Species");
+                });
+
             modelBuilder.Entity("Midnight.EC.Plant.WEB.Models.Entities.Plant", b =>
                 {
                     b.Navigation("Analyses");
@@ -964,6 +998,8 @@ namespace Midnight.EC.Plant.WEB.Models.Migrations
             modelBuilder.Entity("Midnight.EC.Plant.WEB.Models.Entities.PlantSource", b =>
                 {
                     b.Navigation("Contents");
+
+                    b.Navigation("LinkedSpecies");
                 });
 
             modelBuilder.Entity("Midnight.EC.Plant.WEB.Models.Entities.PlantSpecies", b =>
@@ -971,6 +1007,8 @@ namespace Midnight.EC.Plant.WEB.Models.Migrations
                     b.Navigation("Knowledge");
 
                     b.Navigation("Plants");
+
+                    b.Navigation("SourceLinks");
 
                     b.Navigation("Sources");
 

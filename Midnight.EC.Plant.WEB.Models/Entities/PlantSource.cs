@@ -21,4 +21,5 @@ public class PlantSource
 
     public PlantSpecies Species { get; set; } = null!;
     public ICollection<PlantSourceContent> Contents { get; set; } = [];
+    public ICollection<PlantSourceSpecies> LinkedSpecies { get; set; } = [];
 }

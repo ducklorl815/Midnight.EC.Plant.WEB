@@ -13,3 +13,4 @@ d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Models\obj\Debug\net10.0\
 d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Models\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.dll
 d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Models\bin\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.pdb
 d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Models\obj\Debug\net10.0\Midnight.2C3E5EAF.Up2Date
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Models\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Models.sourcelink.json

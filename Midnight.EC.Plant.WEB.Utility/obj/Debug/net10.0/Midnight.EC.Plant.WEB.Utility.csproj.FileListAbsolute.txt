@@ -9,3 +9,4 @@ d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0
 d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\refint\Midnight.EC.Plant.WEB.Utility.dll
 d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.pdb
 d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\ref\Midnight.EC.Plant.WEB.Utility.dll
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB.Utility\obj\Debug\net10.0\Midnight.EC.Plant.WEB.Utility.sourcelink.json

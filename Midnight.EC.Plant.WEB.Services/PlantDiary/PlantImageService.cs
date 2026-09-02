@@ -27,8 +27,10 @@ public class LocalImageStorageService : IImageStorageService
         Directory.CreateDirectory(absoluteFolder);
 
         var absolutePath = Path.Combine(absoluteFolder, fileName);
-        await using var fileStream = File.Create(absolutePath);
-        await stream.CopyToAsync(fileStream, cancellationToken);
+        await using (var fileStream = File.Create(absolutePath))
+        {
+            await stream.CopyToAsync(fileStream, cancellationToken);
+        }
 
         var relativePath = Path.Combine(relativeFolder, fileName).Replace('\\', '/');
         var sha256 = await ComputeSha256Async(absolutePath, cancellationToken);
@@ -150,6 +152,16 @@ public class PlantImageService : IPlantImageService
         }
 
         await _imageRepository.DeleteAsync(image, cancellationToken);
+        await _imageRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UpdateNoteAsync(int imageId, string? note, CancellationToken cancellationToken = default)
+    {
+        var image = await _imageRepository.GetByIdAsync(imageId, cancellationToken)
+            ?? throw new InvalidOperationException("找不到圖片。");
+
+        image.Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        await _imageRepository.UpdateAsync(image, cancellationToken);
         await _imageRepository.SaveChangesAsync(cancellationToken);
     }
 }

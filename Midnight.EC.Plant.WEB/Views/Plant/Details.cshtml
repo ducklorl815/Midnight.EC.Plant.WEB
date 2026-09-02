@@ -1,11 +1,19 @@
 @model Midnight.EC.Plant.WEB.ViewModels.PlantDetailViewModel
+@using Midnight.EC.Plant.WEB.Models.Extensions
 @{
-    ViewData["Title"] = Model.Name;
+    ViewData["Title"] = Model.DisplayName;
     var fertilizerHint = Model.Knowledge?.FertilizerRequirement;
 }
 
-<div class="mb-3">
+<div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
     <a asp-action="Index" class="text-decoration-none text-muted">&larr; 返回我的植栽</a>
+    <div class="d-flex gap-2">
+        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-secondary">編輯</a>
+        <form asp-action="Delete" asp-route-id="@Model.Id" method="post" class="d-inline" onsubmit="return confirm('確定刪除此植栽？');">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-sm btn-outline-danger">刪除</button>
+        </form>
+    </div>
 </div>
 
 @if (TempData["Error"] is string errorMessage)
@@ -32,14 +40,33 @@
         }
     </div>
     <div class="plant-hero-info">
-        <h1 class="plant-hero-title">@Model.Name</h1>
+        <h1 class="plant-hero-title">@Model.DisplayName</h1>
         <p class="plant-hero-meta">
-            @(Model.SpeciesName ?? "未知物種")
-            @if (!string.IsNullOrWhiteSpace(Model.Location))
+            @if (!string.IsNullOrWhiteSpace(Model.SpeciesChineseName))
             {
-                <span> · @Model.Location</span>
+                <span>@Model.SpeciesChineseName</span>
+            }
+            else if (!string.IsNullOrWhiteSpace(Model.SpeciesName))
+            {
+                <span>@Model.SpeciesName</span>
+            }
+            else
+            {
+                <span>未知物種</span>
             }
         </p>
+        @if (!string.IsNullOrWhiteSpace(Model.SpeciesScientificName))
+        {
+            <p class="plant-hero-scientific">@Model.SpeciesScientificName</p>
+        }
+        @if (!string.IsNullOrWhiteSpace(Model.Location))
+        {
+            <p class="plant-hero-location">📍 @Model.Location</p>
+        }
+        @if (Model.DaysSinceLastWatering.HasValue)
+        {
+            <div class="plant-hero-watering">💧 距上次澆水已過 @Model.DaysSinceLastWatering 天</div>
+        }
         @if (Model.LatestHealthScore.HasValue)
         {
             <span class="health-badge health-badge-@(Model.LatestHealthScore >= 70 ? "good" : Model.LatestHealthScore >= 50 ? "warn" : "bad")">
@@ -200,9 +227,14 @@
                             }
                         </div>
                         <div class="photo-card-body">
-                            <div class="photo-card-note">
-                                @(string.IsNullOrWhiteSpace(photo.Note) ? "（無備註）" : photo.Note)
-                            </div>
+                            <form asp-action="UpdatePhotoNote" asp-route-id="@Model.Id" asp-route-imageId="@photo.Id" method="post" class="photo-note-form mb-2">
+                                @Html.AntiForgeryToken()
+                                <label class="form-label small mb-1">備註</label>
+                                <div class="input-group input-group-sm">
+                                    <input name="Note" class="form-control" value="@photo.Note" placeholder="例如：葉片發黃、新長側芽" />
+                                    <button type="submit" class="btn btn-outline-secondary">儲存</button>
+                                </div>
+                            </form>
                             <div class="small text-muted mb-2">@photo.CreatedAt.ToLocalTime().ToString("yyyy/MM/dd HH:mm")</div>
 
                             @if (photo.LatestAnalysis != null)
@@ -301,7 +333,7 @@
                         {
                             <tr>
                                 <td>@record.RecordDate.ToString("yyyy/MM/dd")</td>
-                                <td>@record.CareType</td>
+                                <td>@record.CareType.GetDisplayName()</td>
                                 <td>@record.DisplayValue</td>
                             </tr>
                         }

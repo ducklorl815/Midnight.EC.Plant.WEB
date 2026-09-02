@@ -82,29 +82,34 @@ public class AdminPlantSourceController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(AdminPlantSourceCreateViewModel model, CancellationToken cancellationToken)
     {
-        if (model.SpeciesId <= 0 || string.IsNullOrWhiteSpace(model.Url))
+        if (model.SpeciesIds.Length == 0 || string.IsNullOrWhiteSpace(model.Url))
         {
-            ModelState.AddModelError(string.Empty, "請先完成解析並選擇物種。");
+            ModelState.AddModelError(string.Empty, "請先完成解析並選擇至少一個物種。");
             return View(await BuildCreateViewModel(model, cancellationToken));
         }
 
         try
         {
             var parsed = await _plantSourceService.ParseUrlAsync(model.Url, model.SourceType, cancellationToken);
-            if (parsed.IsExisting && parsed.ExistingSourceId.HasValue)
-            {
-                return RedirectToAction(nameof(Details), new { id = parsed.ExistingSourceId.Value });
-            }
-
-            var saved = await _plantSourceService.SaveAsync(model.SpeciesId, parsed, model.Title, cancellationToken);
-            TempData["Success"] = "外部來源已儲存。";
+            var saved = await _plantSourceService.SaveAsync(model.SpeciesIds, parsed, model.Title, cancellationToken);
+            TempData["Success"] = parsed.IsExisting
+                ? "此 URL 已存在，已追加關聯物種。"
+                : "外部來源已儲存。";
             return RedirectToAction(nameof(Details), new { id = saved.Id });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Save plant source failed");
             ModelState.AddModelError(string.Empty, ex.Message);
-            model.Preview = MapPreview(await _plantSourceService.ParseUrlAsync(model.Url, model.SourceType, cancellationToken));
+            try
+            {
+                model.Preview = MapPreview(await _plantSourceService.ParseUrlAsync(model.Url, model.SourceType, cancellationToken));
+            }
+            catch
+            {
+                // keep existing preview if re-parse fails
+            }
+
             return View(await BuildCreateViewModel(model, cancellationToken));
         }
     }
@@ -122,6 +127,7 @@ public class AdminPlantSourceController : Controller
         {
             Id = source.Id,
             SpeciesName = source.SpeciesName,
+            LinkedSpeciesNames = source.LinkedSpeciesNames,
             SourceType = source.SourceType,
             Title = source.Title,
             Url = source.Url,
@@ -168,9 +174,20 @@ public class AdminPlantSourceController : Controller
         model.SpeciesOptions = species.Select(s => new SpeciesOptionViewModel
         {
             Id = s.Id,
-            Name = s.ChineseName ?? s.CommonName ?? s.ScientificName
+            Name = FormatSpeciesOptionName(s)
         }).ToList();
         return model;
+    }
+
+    private static string FormatSpeciesOptionName(Midnight.EC.Plant.WEB.Models.Entities.PlantSpecies species)
+    {
+        var chinese = species.ChineseName ?? species.CommonName;
+        if (!string.IsNullOrWhiteSpace(chinese) && !string.IsNullOrWhiteSpace(species.ScientificName))
+        {
+            return $"{chinese}（{species.ScientificName}）";
+        }
+
+        return chinese ?? species.ScientificName;
     }
 
     private static ParsedPreviewViewModel MapPreview(ParsedContentDto parsed) => new()

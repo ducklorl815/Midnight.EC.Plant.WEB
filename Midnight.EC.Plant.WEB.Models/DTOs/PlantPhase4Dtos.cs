@@ -132,7 +132,15 @@ public class PlantDashboardItemDto
 
     public string Name { get; set; } = string.Empty;
 
+    public string? NickName { get; set; }
+
+    public string DisplayName { get; set; } = string.Empty;
+
     public string? SpeciesName { get; set; }
+
+    public string? SpeciesChineseName { get; set; }
+
+    public string? SpeciesScientificName { get; set; }
 
     public string? Location { get; set; }
 
@@ -145,6 +153,7 @@ public class PlantDashboardItemDto
     public int OverdueReminderCount { get; set; }
 
     public List<PlantReminderDto> TopReminders { get; set; } = [];
-
+    public DateTime? LastWateringDate { get; set; }
+    public int? DaysSinceLastWatering { get; set; }
 }
 

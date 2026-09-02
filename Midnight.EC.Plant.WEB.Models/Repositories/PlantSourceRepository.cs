@@ -17,6 +17,8 @@ public class PlantSourceRepository : IPlantSourceRepository
         _context.PlantSources
             .AsNoTracking()
             .Include(s => s.Species)
+            .Include(s => s.LinkedSpecies)
+            .ThenInclude(ls => ls.Species)
             .Include(s => s.Contents)
             .OrderByDescending(s => s.CreatedAt)
             .ToListAsync(cancellationToken);
@@ -25,17 +27,20 @@ public class PlantSourceRepository : IPlantSourceRepository
         _context.PlantSources
             .AsNoTracking()
             .Include(s => s.Contents)
-            .Where(s => s.SpeciesId == speciesId && s.IsActive)
+            .Where(s => s.IsActive && (s.SpeciesId == speciesId || s.LinkedSpecies.Any(ls => ls.SpeciesId == speciesId)))
             .ToListAsync(cancellationToken);
 
     public Task<PlantSource?> GetByIdWithContentsAsync(int id, CancellationToken cancellationToken = default) =>
         _context.PlantSources
             .Include(s => s.Species)
+            .Include(s => s.LinkedSpecies)
+            .ThenInclude(ls => ls.Species)
             .Include(s => s.Contents)
             .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
 
     public Task<PlantSource?> GetByUrlHashAsync(string contentHash, CancellationToken cancellationToken = default) =>
         _context.PlantSources
+            .Include(s => s.LinkedSpecies)
             .Include(s => s.Contents)
             .FirstOrDefaultAsync(s => s.ContentHash == contentHash, cancellationToken);
 

@@ -280,7 +280,8 @@ d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB\obj\Debug\net10.0\refint\
 d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB\obj\Debug\net10.0\Midnight.EC.Plant.WEB.pdb
 d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB\obj\Debug\net10.0\Midnight.EC.Plant.WEB.genruntimeconfig.cache
 d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB\obj\Debug\net10.0\ref\Midnight.EC.Plant.WEB.dll
-D:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt
-D:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB\obj\Debug\net10.0\compressed\xu62gl0v7n-{0}-2hz8m0rphw-2hz8m0rphw.gz
 D:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB\obj\Debug\net10.0\compressed\3dvrsuifui-{0}-isbxe5yxsy-isbxe5yxsy.gz
 D:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB\obj\Debug\net10.0\compressed\vi1s2hi5n6-{0}-isbxe5yxsy-isbxe5yxsy.gz
+D:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB\obj\Debug\net10.0\Midnight.EC.Plant.WEB.sourcelink.json
+d:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB\obj\Debug\net10.0\compressed\xu62gl0v7n-{0}-8du13yxgsr-8du13yxgsr.gz
+D:\Project\Midnight.EC.Plant.WEB\Midnight.EC.Plant.WEB\obj\Debug\net10.0\staticwebassets.upToDateCheck.txt

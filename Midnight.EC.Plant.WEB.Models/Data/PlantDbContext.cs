@@ -16,6 +16,7 @@ public class PlantDbContext : DbContext
     public DbSet<PlantImage> PlantImages => Set<PlantImage>();
     public DbSet<PlantAnalysis> PlantAnalyses => Set<PlantAnalysis>();
     public DbSet<PlantSource> PlantSources => Set<PlantSource>();
+    public DbSet<PlantSourceSpecies> PlantSourceSpecies => Set<PlantSourceSpecies>();
     public DbSet<PlantSourceContent> PlantSourceContents => Set<PlantSourceContent>();
     public DbSet<PlantAnalysisJob> PlantAnalysisJobs => Set<PlantAnalysisJob>();
     public DbSet<PlantCareRecord> PlantCareRecords => Set<PlantCareRecord>();
@@ -139,6 +140,21 @@ public class PlantDbContext : DbContext
                 .WithMany(e => e.Sources)
                 .HasForeignKey(e => e.SpeciesId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PlantSourceSpecies>(entity =>
+        {
+            entity.ToTable("PlantSourceSpecies");
+            entity.HasKey(e => new { e.SourceId, e.SpeciesId });
+            entity.HasIndex(e => e.SpeciesId);
+            entity.HasOne(e => e.Source)
+                .WithMany(e => e.LinkedSpecies)
+                .HasForeignKey(e => e.SourceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Species)
+                .WithMany(e => e.SourceLinks)
+                .HasForeignKey(e => e.SpeciesId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<PlantSourceContent>(entity =>

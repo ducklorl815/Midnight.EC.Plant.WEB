@@ -123,3 +123,6 @@ wwwroot\lib\jquery\dist\jquery.min.map
 wwwroot\lib\jquery\dist\jquery.slim.js
 wwwroot\lib\jquery\dist\jquery.slim.min.js
 wwwroot\lib\jquery\dist\jquery.slim.min.map
+wwwroot\uploads\plants\11\photos\1dddceb90c694a859c66f316f6630abf.jpg
+wwwroot\uploads\plants\11\photos\65e9d6667a994bf48e0058823ffe3f94.jpg
+wwwroot\uploads\plants\11\photos\696baccb4fe5497bb178bfec5da3178f.jpg

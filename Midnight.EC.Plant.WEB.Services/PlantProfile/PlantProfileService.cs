@@ -67,6 +67,15 @@ public class PlantProfileService : IPlantProfileService
         profile.TargetTemperatureMin = model.TargetTemperatureMin;
         profile.TargetTemperatureMax = model.TargetTemperatureMax;
         profile.PersonalCareNotes = model.PersonalCareNotes;
+        profile.ActualPlacement = model.ActualPlacement;
+        profile.ActualLight = model.ActualLight;
+        profile.HasRainCover = model.HasRainCover;
+        profile.SubstrateType = model.SubstrateType;
+        profile.City = model.City;
+        profile.OverrideSuggestedLight = model.OverrideSuggestedLight;
+        profile.OverrideCareTaboosJson = model.OverrideCareTaboosJson;
+        profile.WateringIntervalDetachedFromWiki = model.WateringIntervalDetachedFromWiki;
+        profile.EnvironmentMismatchAcknowledged = model.EnvironmentMismatchAcknowledged;
         profile.UpdatedAt = now;
     }
 }

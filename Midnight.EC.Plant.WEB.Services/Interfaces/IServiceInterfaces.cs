@@ -10,8 +10,21 @@ public interface IPlantService
     Task<PlantDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default);
     Task<PlantDto> CreateAsync(string name, string? speciesKeyword, string? nickName, string? location, string? description, DateTime? startDate, CancellationToken cancellationToken = default);
     Task<PlantDto> CreateAsync(string name, string? speciesKeyword, Stream? identificationImage, string? identificationFileName, string? nickName, string? location, string? description, DateTime? startDate, CancellationToken cancellationToken = default);
+    Task<bool> IsNickNameTakenAsync(string nickName, int? excludePlantId = null, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ExternalSpeciesResult>> SearchSpeciesCandidatesAsync(string keyword, CancellationToken cancellationToken = default);
+    Task<PlantDto> CreateFromDraftAsync(CreatePlantDraft draft, ExternalSpeciesResult? confirmedSpecies, CancellationToken cancellationToken = default);
     Task<PlantDto> UpdateAsync(int id, string name, string? nickName, string? location, string? description, DateTime? startDate, CancellationToken cancellationToken = default);
     Task DeleteAsync(int id, CancellationToken cancellationToken = default);
+}
+
+public class CreatePlantDraft
+{
+    public string ChineseName { get; set; } = string.Empty;
+    public string NickName { get; set; } = string.Empty;
+    public string? Location { get; set; }
+    public string? Description { get; set; }
+    public DateTime? StartDate { get; set; }
+    public bool WateredToday { get; set; } = true;
 }
 
 public interface IPlantKnowledgeService
@@ -40,6 +53,8 @@ public interface IPlantAnalysisService
 public interface IExternalPlantApiService
 {
     Task<ExternalPlantSearchResult?> SearchSpeciesAsync(string keyword, CancellationToken cancellationToken = default);
+    /// <summary>iNaturalist + GBIF 為主，學名正規化去重後最多回傳 3 筆。</summary>
+    Task<IReadOnlyList<ExternalSpeciesResult>> SearchSpeciesCandidatesAsync(string keyword, CancellationToken cancellationToken = default);
     Task<PlantIdentificationResult?> IdentifyFromImageAsync(Stream imageStream, string fileName, CancellationToken cancellationToken = default);
 }
 

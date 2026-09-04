@@ -1,0 +1,31 @@
+@{
+    ViewData["Title"] = "設定";
+}
+
+<div class="page-header mb-4">
+    <h1 class="page-title">設定</h1>
+    <p class="page-subtitle">全站設定與尚未開放功能入口。</p>
+</div>
+
+<section class="panel mb-4">
+    <div class="panel-header"><strong>可用</strong></div>
+    <div class="panel-body">
+        <p class="text-muted mb-0">地區下拉為台灣縣市（寫死）；位置備註在各盆編輯。後續匯出／匯入會放這裡。</p>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-header"><strong>尚未開放</strong></div>
+    <div class="panel-body">
+        <ul class="list-unstyled mb-0">
+            <li class="mb-2"><span class="badge text-bg-secondary me-2">未完成</span>匯出／匯入</li>
+            <li class="mb-2"><span class="badge text-bg-secondary me-2">未完成</span>知識未完成彙總頁</li>
+            <li class="mb-2"><span class="badge text-bg-secondary me-2">未完成</span>月底文章</li>
+            <li class="mb-2">
+                <span class="badge text-bg-secondary me-2">未完成</span>
+                <a asp-controller="AdminPlantSource" asp-action="Index">來源解析後台</a>
+                <span class="text-muted small">（先進可看，正式流程後補）</span>
+            </li>
+        </ul>
+    </div>
+</section>

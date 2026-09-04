@@ -20,6 +20,12 @@ public class PlantKnowledge
     public string? CareSummary { get; set; }
     /// <summary>外部來源整合後的可讀照護說明（繁體中文敘述）</summary>
     public string? ExternalCareGuide { get; set; }
+    /// <summary>對應到四檔的建議光照；對不上則留空</summary>
+    public Enums.LightLevel? SuggestedLight { get; set; }
+    /// <summary>規則抽出的禁忌關鍵字 JSON 陣列</summary>
+    public string? CareTaboosJson { get; set; }
+    /// <summary>Wiki／外部建議澆水天數（可空）</summary>
+    public int? SuggestedWateringIntervalDays { get; set; }
     public DateTime? SourceUpdatedAt { get; set; }
     public int DataVersion { get; set; } = 1;
     public DateTime UpdatedAt { get; set; }

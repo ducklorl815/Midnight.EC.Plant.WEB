@@ -157,7 +157,16 @@ public static class EntityMappingExtensions
         TargetHumidityMax = entity.TargetHumidityMax,
         TargetTemperatureMin = entity.TargetTemperatureMin,
         TargetTemperatureMax = entity.TargetTemperatureMax,
-        PersonalCareNotes = entity.PersonalCareNotes
+        PersonalCareNotes = entity.PersonalCareNotes,
+        ActualPlacement = entity.ActualPlacement,
+        ActualLight = entity.ActualLight,
+        HasRainCover = entity.HasRainCover,
+        SubstrateType = entity.SubstrateType,
+        City = entity.City,
+        OverrideSuggestedLight = entity.OverrideSuggestedLight,
+        OverrideCareTaboosJson = entity.OverrideCareTaboosJson,
+        WateringIntervalDetachedFromWiki = entity.WateringIntervalDetachedFromWiki,
+        EnvironmentMismatchAcknowledged = entity.EnvironmentMismatchAcknowledged
     };
 
     public static PlantReminderDto ToDto(this PlantReminder entity, string? plantName = null)

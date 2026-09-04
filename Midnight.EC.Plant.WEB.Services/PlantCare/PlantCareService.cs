@@ -40,10 +40,35 @@ public class PlantCareService : IPlantCareService
         var plant = await _plantRepository.GetByIdAsync(plantId, cancellationToken)
             ?? throw new InvalidOperationException("找不到植物。");
 
+        var day = recordDate.Date;
+        // Spec: same plant + same calendar day + same care type → one record
+        if (careType is CareRecordType.Watering or CareRecordType.Fertilizing)
+        {
+            var existing = await _careRepository.FindSameDayAsync(plant.Id, day, careType, cancellationToken);
+            if (existing != null)
+            {
+                existing.RecordDate = day;
+                if (!string.IsNullOrWhiteSpace(note))
+                {
+                    existing.Note = note;
+                }
+
+                if (numericValue.HasValue)
+                {
+                    existing.NumericValue = numericValue;
+                    existing.Unit = unit;
+                }
+
+                await _careRepository.UpdateAsync(existing, cancellationToken);
+                await _careRepository.SaveChangesAsync(cancellationToken);
+                return existing.ToDto();
+            }
+        }
+
         var record = new Midnight.EC.Plant.WEB.Models.Entities.PlantCareRecord
         {
             PlantId = plant.Id,
-            RecordDate = recordDate,
+            RecordDate = day,
             CareType = careType,
             NumericValue = numericValue,
             Unit = unit,

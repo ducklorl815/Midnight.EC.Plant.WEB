@@ -42,6 +42,16 @@ public class PlantSpeciesRepository : IPlantSpeciesRepository
             .FirstOrDefaultAsync(cancellationToken);
     }
 
+    public Task<PlantSpecies?> GetByScientificNameExactAsync(string scientificName, CancellationToken cancellationToken = default)
+    {
+        var keyword = scientificName.Trim();
+        return _context.PlantSpecies
+            .Include(s => s.Knowledge)
+            .FirstOrDefaultAsync(
+                s => s.ScientificName.ToLower() == keyword.ToLower(),
+                cancellationToken);
+    }
+
     public async Task AddAsync(PlantSpecies species, CancellationToken cancellationToken = default) =>
         await _context.PlantSpecies.AddAsync(species, cancellationToken);
 

@@ -1,0 +1,97 @@
+@model Midnight.EC.Plant.WEB.ViewModels.ConfirmSpeciesViewModel
+
+@{
+    ViewData["Title"] = "確認物種";
+}
+
+<div class="page-header mb-4">
+    <h1 class="page-title">確認物種</h1>
+    <p class="page-subtitle">
+        暱稱「@Model.Draft.NickName」／中文名「@Model.Draft.ChineseName」。
+        @(Model.Candidates.Count == 0 ? "沒有候選，可手填學名或先建檔。" : "請確認後寫入（即使只有 1 筆也要確認）。")
+    </p>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-9">
+        @if (Model.Candidates.Count > 0)
+        {
+            <form asp-action="ConfirmSpecies" method="post" class="mb-4">
+                <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+                <partial name="_CreateDraftHidden" model="Model.Draft" />
+
+                <div class="row g-3 mb-3">
+                    @for (var i = 0; i < Model.Candidates.Count; i++)
+                    {
+                        var c = Model.Candidates[i];
+                        <div class="col-md-4">
+                            <label class="card h-100 p-3 species-candidate @(Model.SelectedIndex == i ? "border-primary" : "")" style="cursor:pointer;">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="radio" name="SelectedIndex" value="@i"
+                                           @(Model.SelectedIndex == i || (Model.SelectedIndex == null && i == 0) ? "checked" : null) />
+                                    <span class="fw-semibold">@c.ScientificName</span>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(c.ImageUrl))
+                                {
+                                    <img src="@c.ImageUrl" alt="@c.ScientificName" class="img-fluid rounded mb-2" style="max-height:140px;object-fit:cover;width:100%;" />
+                                }
+                                else
+                                {
+                                    <div class="bg-light rounded mb-2 d-flex align-items-center justify-content-center" style="height:100px;">無圖</div>
+                                }
+                                <div class="small text-muted">
+                                    @if (!string.IsNullOrWhiteSpace(c.CommonName)) { <div>俗名：@c.CommonName</div> }
+                                    @if (!string.IsNullOrWhiteSpace(c.Family) || !string.IsNullOrWhiteSpace(c.Genus))
+                                    {
+                                        <div>科屬：@c.Family @c.Genus</div>
+                                    }
+                                    <div>來源：@c.Provider</div>
+                                </div>
+                                <input type="hidden" name="Candidates[@i].ScientificName" value="@c.ScientificName" />
+                                <input type="hidden" name="Candidates[@i].CommonName" value="@c.CommonName" />
+                                <input type="hidden" name="Candidates[@i].ChineseName" value="@c.ChineseName" />
+                                <input type="hidden" name="Candidates[@i].Genus" value="@c.Genus" />
+                                <input type="hidden" name="Candidates[@i].Family" value="@c.Family" />
+                                <input type="hidden" name="Candidates[@i].ImageUrl" value="@c.ImageUrl" />
+                                <input type="hidden" name="Candidates[@i].TaxonId" value="@c.TaxonId" />
+                                <input type="hidden" name="Candidates[@i].Provider" value="@c.Provider" />
+                                <input type="hidden" name="Candidates[@i].SourceType" value="@c.SourceType" />
+                                <input type="hidden" name="Candidates[@i].SourceId" value="@c.SourceId" />
+                            </label>
+                        </div>
+                    }
+                </div>
+
+                <button type="submit" class="btn btn-plant-primary">確認此物種並建立</button>
+                <a asp-action="Create" class="btn btn-outline-secondary">返回修改</a>
+            </form>
+        }
+
+        <section class="panel mb-3">
+            <div class="panel-header"><strong>手填學名再查</strong></div>
+            <div class="panel-body">
+                <form asp-action="SearchByScientificName" method="post" class="row g-2 align-items-end">
+                    <partial name="_CreateDraftHidden" model="Model.Draft" />
+                    <div class="col-md-8">
+                        <label asp-for="ManualScientificName" class="form-label"></label>
+                        <input asp-for="ManualScientificName" class="form-control" placeholder="例如：Stephania erecta" />
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn btn-outline-primary w-100">查學名</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header"><strong>先建檔、知識之後補</strong></div>
+            <div class="panel-body">
+                <p class="text-muted small mb-3">斷網或對不到物種時可用。會以「未確認」物種建檔，提醒週期預設 7 天。</p>
+                <form asp-action="CreateWithoutSpecies" method="post">
+                    <partial name="_CreateDraftHidden" model="Model.Draft" />
+                    <button type="submit" class="btn btn-outline-secondary">略過物種，直接建立</button>
+                </form>
+            </div>
+        </section>
+    </div>
+</div>

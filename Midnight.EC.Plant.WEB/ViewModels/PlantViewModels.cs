@@ -6,6 +6,9 @@ namespace Midnight.EC.Plant.WEB.ViewModels;
 public class PlantListViewModel
 {
     public List<PlantDashboardCardViewModel> Plants { get; set; } = [];
+    public List<PlantDashboardCardViewModel> OverdueWatering { get; set; } = [];
+    public List<PlantDashboardCardViewModel> MissingWateringDate { get; set; } = [];
+    public List<PlantDashboardCardViewModel> IncompleteData { get; set; } = [];
     public int TotalActiveReminders { get; set; }
     public int TotalOverdueReminders { get; set; }
 }
@@ -26,6 +29,12 @@ public class PlantDashboardCardViewModel
     public int OverdueReminderCount { get; set; }
     public List<PlantReminderItemViewModel> TopReminders { get; set; } = [];
     public int? DaysSinceLastWatering { get; set; }
+    public int WateringIntervalDays { get; set; } = 7;
+    public bool IsWateringOverdue { get; set; }
+    public bool MissingLastWateringDate { get; set; }
+    public bool KnowledgeIncomplete { get; set; }
+    public bool EnvironmentIncomplete { get; set; }
+    public string? ActualLightLabel { get; set; }
 }
 
 public class PlantListItemViewModel
@@ -38,18 +47,18 @@ public class PlantListItemViewModel
 
 public class CreatePlantViewModel
 {
-    [Required(ErrorMessage = "請輸入植物名稱")]
-    [Display(Name = "我的植物名稱")]
-    public string Name { get; set; } = string.Empty;
-
-    [Required(ErrorMessage = "請輸入物種名稱")]
-    [Display(Name = "物種名稱（中文或學名）")]
-    public string SpeciesKeyword { get; set; } = string.Empty;
-
+    [Required(ErrorMessage = "請輸入暱稱")]
     [Display(Name = "暱稱")]
-    public string? NickName { get; set; }
+    public string NickName { get; set; } = string.Empty;
 
-    [Display(Name = "位置")]
+    [Required(ErrorMessage = "請輸入中文名")]
+    [Display(Name = "中文名")]
+    public string ChineseName { get; set; } = string.Empty;
+
+    [Display(Name = "今天已澆水")]
+    public bool WateredToday { get; set; } = true;
+
+    [Display(Name = "位置備註")]
     public string? Location { get; set; }
 
     [Display(Name = "備註")]
@@ -58,6 +67,30 @@ public class CreatePlantViewModel
     [Display(Name = "幼苗時間")]
     [DataType(DataType.Date)]
     public DateTime? StartDate { get; set; }
+}
+
+public class ConfirmSpeciesViewModel
+{
+    public CreatePlantViewModel Draft { get; set; } = new();
+    public List<SpeciesCandidateItemViewModel> Candidates { get; set; } = [];
+    public int? SelectedIndex { get; set; }
+
+    [Display(Name = "手填學名再查")]
+    public string? ManualScientificName { get; set; }
+}
+
+public class SpeciesCandidateItemViewModel
+{
+    public string ScientificName { get; set; } = string.Empty;
+    public string? CommonName { get; set; }
+    public string? ChineseName { get; set; }
+    public string? Genus { get; set; }
+    public string? Family { get; set; }
+    public string? ImageUrl { get; set; }
+    public string? TaxonId { get; set; }
+    public string Provider { get; set; } = string.Empty;
+    public string SourceType { get; set; } = string.Empty;
+    public string SourceId { get; set; } = string.Empty;
 }
 
 public class EditPlantViewModel
@@ -107,6 +140,8 @@ public class PlantDetailViewModel
     public int? DaysSinceLastWatering { get; set; }
     public CreateCareRecordViewModel NewCareRecord { get; set; } = new();
     public CreatePhotoViewModel NewPhoto { get; set; } = new();
+    public TodayLogViewModel TodayLog { get; set; } = new();
+    public TodayLogViewModel BackfillLog { get; set; } = new();
     public PlantProfileViewModel Profile { get; set; } = new();
     public PlantCareSuggestionsViewModel CareSuggestions { get; set; } = new();
     public SyncKnowledgeViewModel SyncKnowledge { get; set; } = new();
@@ -235,8 +270,7 @@ public class CreateCareRecordViewModel
     [DataType(DataType.Date)]
     public DateTime RecordDate { get; set; } = DateTime.Today;
 
-    [Required]
-    [Display(Name = "紀錄類型")]
+    [Display(Name = "類型")]
     public CareRecordType CareType { get; set; } = CareRecordType.Watering;
 
     [Display(Name = "數值")]
@@ -247,6 +281,20 @@ public class CreateCareRecordViewModel
 
     [Display(Name = "備註")]
     public string? Note { get; set; }
+}
+
+public class TodayLogViewModel
+{
+    public bool Watered { get; set; }
+    public bool Fertilized { get; set; }
+
+    [Display(Name = "一句話")]
+    public string? Note { get; set; }
+
+    /// <summary>僅補記用；日常極簡列為今天。</summary>
+    [DataType(DataType.Date)]
+    [Display(Name = "補記日期")]
+    public DateTime? LogDate { get; set; }
 }
 
 public class PlantTrendViewModel
@@ -283,6 +331,30 @@ public class PlantProfileViewModel
 
     [Display(Name = "個人化照護備註")]
     public string? PersonalCareNotes { get; set; }
+
+    [Display(Name = "實際位置類型")]
+    public PlacementType? ActualPlacement { get; set; }
+
+    [Display(Name = "實際日照")]
+    public LightLevel? ActualLight { get; set; }
+
+    [Display(Name = "是否有遮雨")]
+    public bool? HasRainCover { get; set; }
+
+    [Display(Name = "介質類型")]
+    public string? SubstrateType { get; set; }
+
+    [Display(Name = "所在縣市")]
+    public string? City { get; set; }
+
+    [Display(Name = "我知道環境不理想")]
+    public bool AcknowledgeMismatch { get; set; }
+
+    public List<string> MismatchWarnings { get; set; } = [];
+    public LightLevel? SuggestedLight { get; set; }
+    public List<string> CareTaboos { get; set; } = [];
+    public string? SuggestedLightLabel => LightLevelDisplay.ToLabel(SuggestedLight);
+    public bool EnvironmentIncomplete { get; set; }
 }
 
 public class PlantReminderItemViewModel

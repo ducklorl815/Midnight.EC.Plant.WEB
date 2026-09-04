@@ -20,6 +20,10 @@
 {
     <div class="alert alert-warning">@errorMessage</div>
 }
+@if (TempData["Flash"] is string flashMessage)
+{
+    <div class="alert alert-success">@flashMessage</div>
+}
 @if (TempData["Success"] is string successMessage)
 {
     <div class="alert alert-success">@successMessage</div>
@@ -73,6 +77,73 @@
                 健康度 @Model.LatestHealthScore
             </span>
         }
+        <div class="mt-2 d-flex flex-wrap gap-2">
+            <a asp-action="EditEnvironment" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-primary">補實際環境</a>
+        </div>
+    </div>
+</section>
+
+<section class="panel mb-4">
+    <div class="panel-header"><strong>今日紀錄</strong> <span class="text-muted small">永遠記今天 · 照片可選</span></div>
+    <div class="panel-body">
+        <form asp-action="SaveTodayLog" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+            <div class="d-flex flex-wrap gap-3 align-items-center mb-3">
+                <div class="form-check">
+                    <input asp-for="TodayLog.Watered" class="form-check-input" />
+                    <label asp-for="TodayLog.Watered" class="form-check-label">已澆水</label>
+                </div>
+                <div class="form-check">
+                    <input asp-for="TodayLog.Fertilized" class="form-check-input" />
+                    <label asp-for="TodayLog.Fertilized" class="form-check-label">已施肥</label>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label asp-for="TodayLog.Note" class="form-label"></label>
+                <input asp-for="TodayLog.Note" class="form-control" placeholder="可選：草況一句話" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">照片（可選，可多張）</label>
+                <input type="file" name="photos" class="form-control" accept="image/*" multiple />
+            </div>
+            <button type="submit" class="btn btn-plant-primary">存檔</button>
+            <span class="text-muted small ms-2">只勾施肥也可以存</span>
+        </form>
+    </div>
+</section>
+
+<section class="panel mb-4">
+    <div class="panel-header"><strong>補記某日</strong> <span class="text-muted small">只能過去 · 不限多久以前</span></div>
+    <div class="panel-body">
+        <form asp-action="BackfillLog" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" class="row g-3 align-items-end">
+            @Html.AntiForgeryToken()
+            <div class="col-md-3">
+                <label asp-for="BackfillLog.LogDate" class="form-label"></label>
+                <input asp-for="BackfillLog.LogDate" class="form-control" type="date" />
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-4">
+                    <input asp-for="BackfillLog.Watered" class="form-check-input" />
+                    <label asp-for="BackfillLog.Watered" class="form-check-label">澆水</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-4">
+                    <input asp-for="BackfillLog.Fertilized" class="form-check-input" />
+                    <label asp-for="BackfillLog.Fertilized" class="form-check-label">施肥</label>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label asp-for="BackfillLog.Note" class="form-label"></label>
+                <input asp-for="BackfillLog.Note" class="form-control" placeholder="可選" />
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-outline-primary w-100">補記</button>
+            </div>
+            <div class="col-12">
+                <input type="file" name="photos" class="form-control form-control-sm" accept="image/*" multiple />
+            </div>
+        </form>
     </div>
 </section>
 

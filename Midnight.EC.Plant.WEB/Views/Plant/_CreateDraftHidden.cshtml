@@ -1,0 +1,8 @@
+@model Midnight.EC.Plant.WEB.ViewModels.CreatePlantViewModel
+
+<input type="hidden" name="Draft.NickName" value="@Model.NickName" />
+<input type="hidden" name="Draft.ChineseName" value="@Model.ChineseName" />
+<input type="hidden" name="Draft.WateredToday" value="@(Model.WateredToday ? "true" : "false")" />
+<input type="hidden" name="Draft.Location" value="@Model.Location" />
+<input type="hidden" name="Draft.Description" value="@Model.Description" />
+<input type="hidden" name="Draft.StartDate" value="@(Model.StartDate?.ToString("yyyy-MM-dd"))" />

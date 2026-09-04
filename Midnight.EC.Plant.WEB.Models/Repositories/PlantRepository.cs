@@ -44,6 +44,18 @@ public class PlantRepository : IPlantRepository
             .ThenInclude(s => s!.Knowledge)
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
+    public Task<bool> IsNickNameTakenAsync(string nickName, int? excludePlantId = null, CancellationToken cancellationToken = default)
+    {
+        var key = nickName.Trim();
+        var query = _context.Plants.AsNoTracking().Where(p => p.IsActive && p.NickName != null && p.NickName == key);
+        if (excludePlantId.HasValue)
+        {
+            query = query.Where(p => p.Id != excludePlantId.Value);
+        }
+
+        return query.AnyAsync(cancellationToken);
+    }
+
     public async Task AddAsync(Entities.Plant plant, CancellationToken cancellationToken = default) =>
         await _context.Plants.AddAsync(plant, cancellationToken);
 

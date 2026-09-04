@@ -1,69 +1,82 @@
-@model Midnight.EC.Plant.WEB.ViewModels.CreatePlantViewModel
-@{
-    ViewData["Title"] = "新增植物";
-}
-
-<div class="page-header mb-4">
-    <h1 class="page-title">新增植物</h1>
-    <p class="page-subtitle">輸入您知道的植物名稱，系統會從外部來源取得官方栽培說明。</p>
-</div>
-
-<div class="row justify-content-center">
-    <div class="col-lg-8 col-xl-7">
-        <section class="panel">
-            <div class="panel-header">
-                <strong>基本資料</strong>
-            </div>
-            <div class="panel-body">
-                <form asp-action="Create" method="post">
-                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-
-                    <div class="mb-3">
-                        <label asp-for="NickName" class="form-label"></label>
-                        <input asp-for="NickName" class="form-control" placeholder="例如：小烏龜" />
-                        <div class="form-text">給這株植物取一個好認的暱稱，同種植物時方便區分。</div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="Name" class="form-label"></label>
-                        <input asp-for="Name" class="form-control" placeholder="例如：陽台玉露" />
-                        <span asp-validation-for="Name" class="text-danger"></span>
-                    </div>
-
-                    <div class="mb-3">
-                        <label asp-for="SpeciesKeyword" class="form-label"></label>
-                        <input asp-for="SpeciesKeyword" class="form-control" placeholder="例如：圓葉山烏龜、Stephania erecta" />
-                        <div class="form-text">請輸入品種中文名或學名，系統會自動查詢對應物種。</div>
-                        <span asp-validation-for="SpeciesKeyword" class="text-danger"></span>
-                    </div>
-
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label asp-for="StartDate" class="form-label"></label>
-                            <input asp-for="StartDate" class="form-control" type="date" />
-                            <div class="form-text">入手或開始照顧的日期。</div>
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="Location" class="form-label"></label>
-                            <input asp-for="Location" class="form-control" placeholder="例如：陽台內側" />
-                        </div>
-                    </div>
-
-                    <div class="mb-3 mt-3">
-                        <label asp-for="Description" class="form-label"></label>
-                        <textarea asp-for="Description" class="form-control" rows="3" placeholder="您的個人備註（選填）"></textarea>
-                    </div>
-
-                    <div class="d-flex flex-wrap gap-2">
-                        <button type="submit" class="btn btn-plant-primary">建立植物</button>
-                        <a asp-action="Index" class="btn btn-outline-secondary">返回</a>
-                    </div>
-                </form>
-            </div>
-        </section>
-    </div>
-</div>
-
-@section Scripts {
-    <partial name="_ValidationScriptsPartial" />
-}
+@model Midnight.EC.Plant.WEB.ViewModels.CreatePlantViewModel
+
+@{
+    ViewData["Title"] = "新增植物";
+}
+
+<div class="page-header mb-4">
+    <h1 class="page-title">新增植物</h1>
+    <p class="page-subtitle">暱稱必填；中文名用來查物種。外部查詢失敗時仍可先建檔。</p>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8 col-xl-7">
+        <section class="panel">
+            <div class="panel-header">
+                <strong>基本資料</strong>
+            </div>
+            <div class="panel-body">
+                <form asp-action="Create" method="post">
+                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="NickName" class="form-label"></label>
+                        <input asp-for="NickName" class="form-control" placeholder="例如：小烏龜（不可與其他盆重複）" />
+                        <div class="form-text">畫面上的主名稱。可先填中文名，若撞名再改。</div>
+                        <span asp-validation-for="NickName" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="ChineseName" class="form-label"></label>
+                        <input asp-for="ChineseName" class="form-control" placeholder="例如：圓葉山烏龜" />
+                        <div class="form-text">用來搜尋 iNaturalist / GBIF；找不到仍可先建檔後補。</div>
+                        <span asp-validation-for="ChineseName" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input asp-for="WateredToday" class="form-check-input" />
+                        <label asp-for="WateredToday" class="form-check-label"></label>
+                        <div class="form-text">預設勾選。取消則不會進入澆水待辦，直到你補上次澆水日。</div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label asp-for="StartDate" class="form-label"></label>
+                            <input asp-for="StartDate" class="form-control" type="date" />
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Location" class="form-label"></label>
+                            <input asp-for="Location" class="form-control" placeholder="例如：客廳窗台" />
+                        </div>
+                    </div>
+
+                    <div class="mb-3 mt-3">
+                        <label asp-for="Description" class="form-label"></label>
+                        <textarea asp-for="Description" class="form-control" rows="2" placeholder="選填"></textarea>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="submit" class="btn btn-plant-primary">下一步：查物種</button>
+                        <a asp-action="Index" class="btn btn-outline-secondary">返回</a>
+                    </div>
+                </form>
+            </div>
+        </section>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const nick = document.getElementById('NickName');
+            const cn = document.getElementById('ChineseName');
+            if (!nick || !cn) return;
+            cn.addEventListener('blur', function () {
+                if (!nick.value.trim() && cn.value.trim()) {
+                    nick.value = cn.value.trim();
+                }
+            });
+        })();
+    </script>
+}

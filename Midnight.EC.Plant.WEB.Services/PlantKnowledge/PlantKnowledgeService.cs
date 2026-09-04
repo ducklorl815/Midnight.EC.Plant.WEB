@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Midnight.EC.Plant.WEB.Models.Entities;
+using Midnight.EC.Plant.WEB.Models.Enums;
 using Midnight.EC.Plant.WEB.Models.Extensions;
 using Midnight.EC.Plant.WEB.Models.External;
 using Midnight.EC.Plant.WEB.Models.Repositories;
@@ -146,6 +147,7 @@ public class PlantKnowledgeService : IPlantKnowledgeService
                 !string.IsNullOrWhiteSpace(aiCareGuide)
                     ? aiCareGuide
                     : BuildExternalCareGuide(displayName, knowledge));
+            ApplyStructuredConstraints(knowledge);
 
             await _knowledgeRepository.AddAsync(knowledge, cancellationToken);
             await _knowledgeRepository.SaveChangesAsync(cancellationToken);
@@ -164,6 +166,7 @@ public class PlantKnowledgeService : IPlantKnowledgeService
             !string.IsNullOrWhiteSpace(aiCareGuide)
                 ? aiCareGuide
                 : BuildExternalCareGuide(displayName, existing));
+        ApplyStructuredConstraints(existing);
 
         existing.DataVersion += 1;
         existing.SourceUpdatedAt = now;
@@ -208,23 +211,45 @@ public class PlantKnowledgeService : IPlantKnowledgeService
         }
     }
 
-    private static Midnight.EC.Plant.WEB.Models.Entities.PlantKnowledge MapNewKnowledge(int speciesId, ExternalKnowledgeResult external, DateTime now) => new()
+    private static Midnight.EC.Plant.WEB.Models.Entities.PlantKnowledge MapNewKnowledge(int speciesId, ExternalKnowledgeResult external, DateTime now)
     {
-        SpeciesId = speciesId,
-        LightRequirement = external.LightRequirement,
-        WaterRequirement = external.WaterRequirement,
-        HumidityRequirement = external.HumidityRequirement,
-        TemperatureMin = external.TemperatureMin,
-        TemperatureMax = external.TemperatureMax,
-        SoilRequirement = external.SoilRequirement,
-        FertilizerRequirement = external.FertilizerRequirement,
-        GrowthSeason = external.GrowthSeason,
-        CareSummary = external.CareSummary,
-        ExternalCareGuide = external.ExternalCareGuide,
-        SourceUpdatedAt = now,
-        DataVersion = 1,
-        UpdatedAt = now
-    };
+        var knowledge = new Midnight.EC.Plant.WEB.Models.Entities.PlantKnowledge
+        {
+            SpeciesId = speciesId,
+            LightRequirement = external.LightRequirement,
+            WaterRequirement = external.WaterRequirement,
+            HumidityRequirement = external.HumidityRequirement,
+            TemperatureMin = external.TemperatureMin,
+            TemperatureMax = external.TemperatureMax,
+            SoilRequirement = external.SoilRequirement,
+            FertilizerRequirement = external.FertilizerRequirement,
+            GrowthSeason = external.GrowthSeason,
+            CareSummary = external.CareSummary,
+            ExternalCareGuide = external.ExternalCareGuide,
+            SourceUpdatedAt = now,
+            DataVersion = 1,
+            UpdatedAt = now
+        };
+        ApplyStructuredConstraints(knowledge);
+        return knowledge;
+    }
+
+    private static void ApplyStructuredConstraints(Midnight.EC.Plant.WEB.Models.Entities.PlantKnowledge knowledge)
+    {
+        knowledge.SuggestedLight = LightLevelDisplay.TryParseFromText(knowledge.LightRequirement)
+            ?? LightLevelDisplay.TryParseFromText(knowledge.CareSummary)
+            ?? LightLevelDisplay.TryParseFromText(knowledge.ExternalCareGuide);
+
+        var taboos = CareConstraintExtractor.ExtractTaboos(
+            knowledge.LightRequirement,
+            knowledge.WaterRequirement,
+            knowledge.SoilRequirement,
+            knowledge.CareSummary,
+            knowledge.ExternalCareGuide,
+            knowledge.CommonProblems);
+        knowledge.CareTaboosJson = CareConstraintExtractor.ToJson(taboos);
+        knowledge.SuggestedWateringIntervalDays = CareConstraintExtractor.InferWateringIntervalDays(knowledge.WaterRequirement);
+    }
 
     private static void MergePartial(Midnight.EC.Plant.WEB.Models.Entities.PlantKnowledge target, ExternalKnowledgePartial partial)
     {

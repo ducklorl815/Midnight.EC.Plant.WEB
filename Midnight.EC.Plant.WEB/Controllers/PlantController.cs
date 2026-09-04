@@ -7,6 +7,7 @@ using Midnight.EC.Plant.WEB.Models.Extensions;
 using Midnight.EC.Plant.WEB.Models.External;
 using Midnight.EC.Plant.WEB.Services.External;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
+using Midnight.EC.Plant.WEB.Services.Plant;
 using Midnight.EC.Plant.WEB.Utility.Json;
 using Midnight.EC.Plant.WEB.ViewModels;
 
@@ -56,67 +57,303 @@ public class PlantController : Controller
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
         var dashboard = await _reminderService.GetDashboardAsync(cancellationToken);
+        var cards = dashboard.Select(MapDashboardCard).ToList();
+
+        var overdue = cards
+            .Where(p => p.IsWateringOverdue)
+            .OrderByDescending(p => p.DaysSinceLastWatering ?? 0)
+            .ToList();
+        var missingDate = cards
+            .Where(p => p.MissingLastWateringDate)
+            .OrderBy(p => p.DisplayName)
+            .ToList();
+        var incomplete = cards
+            .Where(p => !p.MissingLastWateringDate && (p.KnowledgeIncomplete || p.EnvironmentIncomplete))
+            .OrderBy(p => p.DisplayName)
+            .ToList();
+
         var model = new PlantListViewModel
         {
-            Plants = dashboard.Select(p => new PlantDashboardCardViewModel
-            {
-                Id = p.Id,
-                Name = p.Name,
-                NickName = p.NickName,
-                DisplayName = p.DisplayName,
-                SpeciesName = p.SpeciesName,
-                SpeciesChineseName = p.SpeciesChineseName,
-                SpeciesScientificName = p.SpeciesScientificName,
-                Location = p.Location,
-                CoverImagePath = p.CoverImagePath,
-                LatestHealthScore = p.LatestHealthScore,
-                ActiveReminderCount = p.ActiveReminderCount,
-                OverdueReminderCount = p.OverdueReminderCount,
-                DaysSinceLastWatering = p.DaysSinceLastWatering,
-                TopReminders = p.TopReminders.Select(MapReminder).ToList()
-            }).ToList(),
+            Plants = cards,
+            OverdueWatering = overdue,
+            MissingWateringDate = missingDate,
+            IncompleteData = incomplete,
             TotalActiveReminders = dashboard.Sum(p => p.ActiveReminderCount),
-            TotalOverdueReminders = dashboard.Sum(p => p.OverdueReminderCount)
+            TotalOverdueReminders = overdue.Count
         };
 
         return View(model);
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BatchWater(int[]? plantIds, CancellationToken cancellationToken)
+    {
+        if (plantIds == null || plantIds.Length == 0)
+        {
+            TempData["Error"] = "請至少勾選一盆再批次已澆水。";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var today = DateTime.Today;
+        var ok = 0;
+        foreach (var id in plantIds.Distinct())
+        {
+            try
+            {
+                await _careService.CreateAsync(id, today, CareRecordType.Watering, null, null, "首頁批次已澆水", cancellationToken);
+                await _reminderService.SyncRemindersAsync(id, cancellationToken);
+                ok++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Batch water failed for plant {PlantId}", id);
+            }
+        }
+
+        TempData["Success"] = $"已為 {ok} 盆標記今日澆水。";
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetLastWateringDate(int plantId, DateTime lastWateringDate, CancellationToken cancellationToken)
+    {
+        if (lastWateringDate.Date > DateTime.Today)
+        {
+            TempData["Error"] = "上次澆水日不能是未來。";
+            return RedirectToAction(nameof(Index));
+        }
+
+        try
+        {
+            await _careService.CreateAsync(
+                plantId,
+                lastWateringDate.Date,
+                CareRecordType.Watering,
+                null,
+                null,
+                "補上次澆水日",
+                cancellationToken);
+            await _reminderService.SyncRemindersAsync(plantId, cancellationToken);
+            TempData["Success"] = "已補上澆水日起點。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SetLastWateringDate failed");
+            TempData["Error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    private static PlantDashboardCardViewModel MapDashboardCard(PlantDashboardItemDto p) => new()
+    {
+        Id = p.Id,
+        Name = p.Name,
+        NickName = p.NickName,
+        DisplayName = p.DisplayName,
+        SpeciesName = p.SpeciesName,
+        SpeciesChineseName = p.SpeciesChineseName,
+        SpeciesScientificName = p.SpeciesScientificName,
+        Location = p.Location,
+        CoverImagePath = p.CoverImagePath,
+        LatestHealthScore = p.LatestHealthScore,
+        ActiveReminderCount = p.ActiveReminderCount,
+        OverdueReminderCount = p.OverdueReminderCount,
+        DaysSinceLastWatering = p.DaysSinceLastWatering,
+        WateringIntervalDays = p.WateringIntervalDays,
+        IsWateringOverdue = p.IsWateringOverdue,
+        MissingLastWateringDate = p.MissingLastWateringDate,
+        KnowledgeIncomplete = p.KnowledgeIncomplete,
+        EnvironmentIncomplete = p.EnvironmentIncomplete,
+        ActualLightLabel = p.ActualLightLabel,
+        TopReminders = p.TopReminders.Select(MapReminder).ToList()
+    };
+
     [HttpGet]
     public IActionResult Create()
     {
-        return View(new CreatePlantViewModel());
+        return View(new CreatePlantViewModel { WateredToday = true });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreatePlantViewModel model, CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(model.NickName) && !string.IsNullOrWhiteSpace(model.ChineseName))
+        {
+            model.NickName = model.ChineseName.Trim();
+        }
+
         if (!ModelState.IsValid)
         {
             return View(model);
         }
 
+        if (await _plantService.IsNickNameTakenAsync(model.NickName, null, cancellationToken))
+        {
+            ModelState.AddModelError(nameof(model.NickName), $"暱稱「{model.NickName}」已被使用，請換一個。");
+            return View(model);
+        }
+
+        IReadOnlyList<Midnight.EC.Plant.WEB.Models.External.ExternalSpeciesResult> candidates;
         try
         {
-            var plant = await _plantService.CreateAsync(
-                model.Name,
-                model.SpeciesKeyword,
-                model.NickName,
-                model.Location,
-                model.Description,
-                model.StartDate,
+            candidates = await _plantService.SearchSpeciesCandidatesAsync(model.ChineseName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Species candidate search failed; allow pending create");
+            candidates = [];
+        }
+
+        var confirm = new ConfirmSpeciesViewModel
+        {
+            Draft = model,
+            Candidates = candidates.Select(MapCandidate).ToList(),
+            SelectedIndex = candidates.Count > 0 ? 0 : null
+        };
+
+        return View("ConfirmSpecies", confirm);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfirmSpecies(ConfirmSpeciesViewModel model, CancellationToken cancellationToken)
+    {
+        if (model.Draft == null || string.IsNullOrWhiteSpace(model.Draft.NickName))
+        {
+            ModelState.AddModelError(string.Empty, "建檔資料遺失，請重新開始。");
+            return View("Create", model.Draft ?? new CreatePlantViewModel());
+        }
+
+        if (model.SelectedIndex is null ||
+            model.Candidates == null ||
+            model.SelectedIndex < 0 ||
+            model.SelectedIndex >= model.Candidates.Count)
+        {
+            ModelState.AddModelError(string.Empty, "請選擇一筆物種。");
+            return View(model);
+        }
+
+        var selected = model.Candidates[model.SelectedIndex.Value];
+        try
+        {
+            var plant = await _plantService.CreateFromDraftAsync(
+                ToDraft(model.Draft),
+                ToExternal(selected),
                 cancellationToken);
 
+            TempData["Flash"] = "植物已建立。提醒週期預設 7 天；若知識有建議週期，可之後在單盆確認是否套用。";
             return RedirectToAction(nameof(Details), new { id = plant.Id });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Create plant failed");
+            _logger.LogError(ex, "ConfirmSpecies failed");
             ModelState.AddModelError(string.Empty, ex.Message);
             return View(model);
         }
     }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SearchByScientificName(ConfirmSpeciesViewModel model, CancellationToken cancellationToken)
+    {
+        if (model.Draft == null)
+        {
+            return RedirectToAction(nameof(Create));
+        }
+
+        if (string.IsNullOrWhiteSpace(model.ManualScientificName))
+        {
+            ModelState.AddModelError(nameof(model.ManualScientificName), "請輸入學名。");
+            model.Candidates ??= [];
+            return View("ConfirmSpecies", model);
+        }
+
+        IReadOnlyList<Midnight.EC.Plant.WEB.Models.External.ExternalSpeciesResult> candidates;
+        try
+        {
+            candidates = await _plantService.SearchSpeciesCandidatesAsync(model.ManualScientificName.Trim(), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Manual scientific search failed");
+            candidates = [];
+        }
+
+        model.Candidates = candidates.Select(MapCandidate).ToList();
+        model.SelectedIndex = model.Candidates.Count > 0 ? 0 : null;
+        if (model.Candidates.Count == 0)
+        {
+            ModelState.AddModelError(string.Empty, "學名查無候選，可改寫或先略過建檔。");
+        }
+
+        return View("ConfirmSpecies", model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CreateWithoutSpecies(ConfirmSpeciesViewModel model, CancellationToken cancellationToken)
+    {
+        if (model.Draft == null || string.IsNullOrWhiteSpace(model.Draft.ChineseName))
+        {
+            return RedirectToAction(nameof(Create));
+        }
+
+        try
+        {
+            var plant = await _plantService.CreateFromDraftAsync(ToDraft(model.Draft), null, cancellationToken);
+            TempData["Flash"] = "已先建檔（物種未確認）。可之後補知識。";
+            return RedirectToAction(nameof(Details), new { id = plant.Id });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CreateWithoutSpecies failed");
+            ModelState.AddModelError(string.Empty, ex.Message);
+            model.Candidates ??= [];
+            return View("ConfirmSpecies", model);
+        }
+    }
+
+    private static CreatePlantDraft ToDraft(CreatePlantViewModel model) => new()
+    {
+        ChineseName = model.ChineseName.Trim(),
+        NickName = model.NickName.Trim(),
+        Location = model.Location,
+        Description = model.Description,
+        StartDate = model.StartDate,
+        WateredToday = model.WateredToday
+    };
+
+    private static SpeciesCandidateItemViewModel MapCandidate(Midnight.EC.Plant.WEB.Models.External.ExternalSpeciesResult c) => new()
+    {
+        ScientificName = c.ScientificName,
+        CommonName = c.CommonName,
+        ChineseName = c.ChineseName,
+        Genus = c.Genus,
+        Family = c.Family,
+        ImageUrl = c.ImageUrl,
+        TaxonId = c.TaxonId,
+        Provider = c.Provider,
+        SourceType = c.SourceType,
+        SourceId = c.SourceId
+    };
+
+    private static Midnight.EC.Plant.WEB.Models.External.ExternalSpeciesResult ToExternal(SpeciesCandidateItemViewModel c) => new()
+    {
+        ScientificName = c.ScientificName,
+        CommonName = c.CommonName,
+        ChineseName = c.ChineseName,
+        Genus = c.Genus,
+        Family = c.Family,
+        ImageUrl = c.ImageUrl,
+        TaxonId = c.TaxonId,
+        Provider = c.Provider,
+        SourceType = c.SourceType,
+        SourceId = c.SourceId
+    };
 
     [HttpGet]
     public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
@@ -289,7 +526,9 @@ public class PlantController : Controller
             Profile = MapProfile(profile),
             Reminders = reminders.Select(MapReminder).ToList(),
             NewCareRecord = new CreateCareRecordViewModel(),
-            NewPhoto = new CreatePhotoViewModel()
+            NewPhoto = new CreatePhotoViewModel(),
+            TodayLog = new TodayLogViewModel(),
+            BackfillLog = new TodayLogViewModel { LogDate = DateTime.Today.AddDays(-1) }
         };
 
         return View(model);
@@ -327,10 +566,100 @@ public class PlantController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    [HttpGet]
+    public async Task<IActionResult> EditEnvironment(int id, CancellationToken cancellationToken)
+    {
+        var plant = await _plantService.GetByIdAsync(id, cancellationToken);
+        if (plant == null)
+        {
+            return NotFound();
+        }
+
+        var profile = await _profileService.GetByPlantIdAsync(id, cancellationToken);
+        var knowledge = plant.SpeciesId > 0
+            ? await _knowledgeService.GetBySpeciesIdAsync(plant.SpeciesId, cancellationToken)
+            : null;
+
+        var model = MapEnvironmentForm(id, plant.NickName ?? plant.Name, profile, knowledge);
+        ViewBag.PlantId = id;
+        ViewBag.DisplayName = plant.NickName ?? plant.Name;
+        return View(model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditEnvironment(int id, PlantProfileViewModel model, CancellationToken cancellationToken)
+    {
+        var plant = await _plantService.GetByIdAsync(id, cancellationToken);
+        if (plant == null)
+        {
+            return NotFound();
+        }
+
+        var existing = await _profileService.GetByPlantIdAsync(id, cancellationToken);
+        var knowledge = await _knowledgeService.GetBySpeciesIdAsync(plant.SpeciesId, cancellationToken);
+        var suggestedLight = existing?.OverrideSuggestedLight
+            ?? (knowledge != null ? LightLevelDisplay.TryParseFromText(knowledge.LightRequirement) : null);
+        // Prefer DB SuggestedLight after migration; fallback parse
+        var taboos = CareConstraintExtractor.FromJson(existing?.OverrideCareTaboosJson);
+        if (taboos.Count == 0 && knowledge != null)
+        {
+            taboos = CareConstraintExtractor.ExtractTaboos(
+                knowledge.LightRequirement,
+                knowledge.WaterRequirement,
+                knowledge.SoilRequirement,
+                knowledge.CareSummary,
+                knowledge.ExternalCareGuide);
+        }
+
+        var warnings = CareConstraintExtractor.BuildMismatchWarnings(
+            suggestedLight,
+            model.ActualLight,
+            taboos,
+            model.HasRainCover,
+            model.ActualPlacement,
+            model.SubstrateType);
+
+        if (warnings.Count > 0 && !model.AcknowledgeMismatch)
+        {
+            model.MismatchWarnings = warnings;
+            model.SuggestedLight = suggestedLight;
+            model.CareTaboos = taboos;
+            ModelState.AddModelError(nameof(model.AcknowledgeMismatch), "實際環境與建議有落差，請勾選「我知道環境不理想」後再儲存。");
+            ViewBag.PlantId = id;
+            ViewBag.DisplayName = plant.NickName ?? plant.Name;
+            return View(model);
+        }
+
+        await _profileService.SaveAsync(id, new PlantProfileDto
+        {
+            WateringIntervalDays = existing?.WateringIntervalDays ?? PlantService.DefaultWateringIntervalDays,
+            FertilizingIntervalDays = existing?.FertilizingIntervalDays,
+            TargetHumidityMin = existing?.TargetHumidityMin,
+            TargetHumidityMax = existing?.TargetHumidityMax,
+            TargetTemperatureMin = existing?.TargetTemperatureMin,
+            TargetTemperatureMax = existing?.TargetTemperatureMax,
+            PersonalCareNotes = existing?.PersonalCareNotes,
+            ActualPlacement = model.ActualPlacement,
+            ActualLight = model.ActualLight,
+            HasRainCover = model.HasRainCover,
+            SubstrateType = model.SubstrateType,
+            City = model.City,
+            OverrideSuggestedLight = existing?.OverrideSuggestedLight,
+            OverrideCareTaboosJson = existing?.OverrideCareTaboosJson,
+            WateringIntervalDetachedFromWiki = existing?.WateringIntervalDetachedFromWiki ?? false,
+            EnvironmentMismatchAcknowledged = warnings.Count > 0
+        }, cancellationToken);
+
+        TempData["Success"] = "實際環境已儲存。";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveProfile(int id, PlantProfileViewModel model, CancellationToken cancellationToken)
     {
+        var existing = await _profileService.GetByPlantIdAsync(id, cancellationToken);
         await _profileService.SaveAsync(id, new PlantProfileDto
         {
             WateringIntervalDays = model.WateringIntervalDays,
@@ -339,7 +668,16 @@ public class PlantController : Controller
             TargetHumidityMax = model.TargetHumidityMax,
             TargetTemperatureMin = model.TargetTemperatureMin,
             TargetTemperatureMax = model.TargetTemperatureMax,
-            PersonalCareNotes = model.PersonalCareNotes
+            PersonalCareNotes = model.PersonalCareNotes,
+            ActualPlacement = existing?.ActualPlacement,
+            ActualLight = existing?.ActualLight,
+            HasRainCover = existing?.HasRainCover,
+            SubstrateType = existing?.SubstrateType,
+            City = existing?.City,
+            OverrideSuggestedLight = existing?.OverrideSuggestedLight,
+            OverrideCareTaboosJson = existing?.OverrideCareTaboosJson,
+            WateringIntervalDetachedFromWiki = existing?.WateringIntervalDetachedFromWiki ?? false,
+            EnvironmentMismatchAcknowledged = existing?.EnvironmentMismatchAcknowledged ?? false
         }, cancellationToken);
 
         await _reminderService.SyncRemindersAsync(id, cancellationToken);
@@ -428,6 +766,97 @@ public class PlantController : Controller
         await _careService.CreateAsync(id, model.RecordDate, model.CareType, model.NumericValue, unit, model.Note, cancellationToken);
         await _reminderService.SyncRemindersAsync(id, cancellationToken);
         TempData["Success"] = "照護紀錄已新增。";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveTodayLog(
+        int id,
+        [Bind(Prefix = "TodayLog")] TodayLogViewModel model,
+        List<IFormFile>? photos,
+        CancellationToken cancellationToken)
+    {
+        return await SaveLogInternalAsync(id, DateTime.Today, model, photos, stayOnDetails: true, cancellationToken);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BackfillLog(
+        int id,
+        [Bind(Prefix = "BackfillLog")] TodayLogViewModel model,
+        List<IFormFile>? photos,
+        CancellationToken cancellationToken)
+    {
+        if (model.LogDate is null)
+        {
+            TempData["Error"] = "請選擇補記日期。";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var day = model.LogDate.Value.Date;
+        if (day >= DateTime.Today)
+        {
+            TempData["Error"] = "補記只能選今天以前的日期；今天請用上方極簡列。";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        return await SaveLogInternalAsync(id, day, model, photos, stayOnDetails: true, cancellationToken);
+    }
+
+    private async Task<IActionResult> SaveLogInternalAsync(
+        int id,
+        DateTime day,
+        TodayLogViewModel model,
+        List<IFormFile>? photos,
+        bool stayOnDetails,
+        CancellationToken cancellationToken)
+    {
+        if (!model.Watered && !model.Fertilized && string.IsNullOrWhiteSpace(model.Note) && (photos == null || photos.Count == 0))
+        {
+            TempData["Error"] = "請至少勾選澆水／施肥，或寫一句話／上傳照片。";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        try
+        {
+            if (model.Watered)
+            {
+                await _careService.CreateAsync(id, day, CareRecordType.Watering, null, null, null, cancellationToken);
+            }
+
+            if (model.Fertilized)
+            {
+                await _careService.CreateAsync(id, day, CareRecordType.Fertilizing, null, null, null, cancellationToken);
+            }
+
+            if (!string.IsNullOrWhiteSpace(model.Note))
+            {
+                await _diaryService.CreateAsync(id, day, null, model.Note.Trim(), cancellationToken);
+            }
+
+            if (photos != null)
+            {
+                foreach (var photo in photos.Where(p => p.Length > 0))
+                {
+                    await using var stream = photo.OpenReadStream();
+                    await _imageService.UploadAsync(id, stream, photo.FileName, photo.ContentType, null, false, cancellationToken);
+                }
+            }
+
+            if (model.Watered)
+            {
+                await _reminderService.SyncRemindersAsync(id, cancellationToken);
+            }
+
+            TempData["Success"] = day.Date == DateTime.Today ? "今日紀錄已儲存。" : $"已補記 {day:yyyy/MM/dd}。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Save log failed for plant {PlantId}", id);
+            TempData["Error"] = ex.Message;
+        }
+
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -622,8 +1051,44 @@ public class PlantController : Controller
             TargetHumidityMax = profile.TargetHumidityMax,
             TargetTemperatureMin = profile.TargetTemperatureMin,
             TargetTemperatureMax = profile.TargetTemperatureMax,
-            PersonalCareNotes = profile.PersonalCareNotes
+            PersonalCareNotes = profile.PersonalCareNotes,
+            ActualPlacement = profile.ActualPlacement,
+            ActualLight = profile.ActualLight,
+            HasRainCover = profile.HasRainCover,
+            SubstrateType = profile.SubstrateType,
+            City = profile.City
         };
+
+    private static PlantProfileViewModel MapEnvironmentForm(
+        int plantId,
+        string displayName,
+        PlantProfileDto? profile,
+        PlantKnowledgeDto? knowledge)
+    {
+        var suggested = profile?.OverrideSuggestedLight
+            ?? LightLevelDisplay.TryParseFromText(knowledge?.LightRequirement);
+        var taboos = CareConstraintExtractor.FromJson(profile?.OverrideCareTaboosJson);
+        if (taboos.Count == 0)
+        {
+            taboos = CareConstraintExtractor.ExtractTaboos(
+                knowledge?.LightRequirement,
+                knowledge?.WaterRequirement,
+                knowledge?.SoilRequirement,
+                knowledge?.CareSummary,
+                knowledge?.ExternalCareGuide);
+        }
+
+        var model = MapProfile(profile);
+        model.SuggestedLight = suggested;
+        model.CareTaboos = taboos;
+        model.EnvironmentIncomplete =
+            profile?.ActualPlacement == null ||
+            profile.ActualLight == null ||
+            profile.HasRainCover == null ||
+            string.IsNullOrWhiteSpace(profile.SubstrateType) ||
+            string.IsNullOrWhiteSpace(profile.City);
+        return model;
+    }
 
     private static PlantTrendViewModel MapTrend(PlantTrendDto trend) => new()
     {

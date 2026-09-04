@@ -158,6 +158,196 @@ public class ExternalPlantApiService : IExternalPlantApiService
         };
     }
 
+    public async Task<IReadOnlyList<ExternalSpeciesResult>> SearchSpeciesCandidatesAsync(
+        string keyword,
+        CancellationToken cancellationToken = default)
+    {
+        var bag = new Dictionary<string, ExternalSpeciesResult>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            return [];
+        }
+
+        foreach (var term in ChineseKeywordExpander.Expand(keyword))
+        {
+            await CollectINaturalistCandidatesAsync(term, keyword, bag, cancellationToken);
+            await CollectGbifCandidatesAsync(term, keyword, bag, cancellationToken);
+
+            if (!string.IsNullOrWhiteSpace(_options.Trefle.ApiKey) && bag.Count < 3)
+            {
+                var trefle = await SearchTrefleAsync(term, cancellationToken);
+                if (trefle?.Species != null)
+                {
+                    TryAddCandidate(bag, trefle.Species, keyword);
+                }
+            }
+
+            if (bag.Count >= 3)
+            {
+                break;
+            }
+        }
+
+        return bag.Values.Take(3).ToList();
+    }
+
+    private async Task CollectINaturalistCandidatesAsync(
+        string searchTerm,
+        string originalKeyword,
+        Dictionary<string, ExternalSpeciesResult> bag,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var client = _httpClientFactory.CreateClient("ExternalPlantApi");
+            var url = $"{_options.INaturalist.BaseUrl.TrimEnd('/')}/taxa?q={Uri.EscapeDataString(searchTerm)}&iconic_taxa=Plantae&per_page=20";
+            using var response = await client.GetAsync(url, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            if (!document.RootElement.TryGetProperty("results", out var results))
+            {
+                return;
+            }
+
+            var ranked = results.EnumerateArray()
+                .Select(item => (Item: item, Score: ScoreINaturalistCandidate(searchTerm, item)))
+                .Where(x => x.Score >= 0)
+                .OrderByDescending(x => x.Score)
+                .Take(8);
+
+            foreach (var (item, _) in ranked)
+            {
+                if (bag.Count >= 3)
+                {
+                    break;
+                }
+
+                var (genus, family) = ExtractINaturalistTaxonomy(item);
+                var imageUrl = item.TryGetProperty("default_photo", out var photo) && photo.ValueKind == JsonValueKind.Object
+                    ? (photo.TryGetProperty("medium_url", out var mid) ? mid.GetString() : photo.TryGetProperty("square_url", out var sq) ? sq.GetString() : null)
+                    : null;
+
+                var species = new ExternalSpeciesResult
+                {
+                    ScientificName = item.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? searchTerm : searchTerm,
+                    CommonName = item.TryGetProperty("preferred_common_name", out var cn) ? cn.GetString() : null,
+                    ChineseName = ContainsCjk(originalKeyword) ? originalKeyword : null,
+                    Genus = genus,
+                    Family = family,
+                    TaxonId = item.TryGetProperty("id", out var id) ? id.GetRawText() : null,
+                    ImageUrl = imageUrl,
+                    SourceType = "iNaturalist",
+                    SourceId = item.TryGetProperty("id", out var sid) ? sid.GetRawText() : string.Empty,
+                    Provider = "iNaturalist"
+                };
+
+                TryAddCandidate(bag, species, originalKeyword);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "iNaturalist candidate collect failed for {Term}", searchTerm);
+        }
+    }
+
+    private async Task CollectGbifCandidatesAsync(
+        string searchTerm,
+        string originalKeyword,
+        Dictionary<string, ExternalSpeciesResult> bag,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var client = _httpClientFactory.CreateClient("ExternalPlantApi");
+            var url = $"{_options.GBIF.BaseUrl.TrimEnd('/')}/species/search?q={Uri.EscapeDataString(searchTerm)}&limit=10&status=ACCEPTED";
+            using var response = await client.GetAsync(url, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                // fallback: match single
+                var matched = await SearchGbifAsync(searchTerm, cancellationToken);
+                if (matched?.Species != null)
+                {
+                    TryAddCandidate(bag, matched.Species, originalKeyword);
+                }
+
+                return;
+            }
+
+            using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            if (!document.RootElement.TryGetProperty("results", out var results))
+            {
+                return;
+            }
+
+            foreach (var item in results.EnumerateArray())
+            {
+                if (bag.Count >= 3)
+                {
+                    break;
+                }
+
+                var scientific = item.TryGetProperty("scientificName", out var sn) ? sn.GetString()
+                    : item.TryGetProperty("canonicalName", out var can) ? can.GetString()
+                    : null;
+                if (string.IsNullOrWhiteSpace(scientific))
+                {
+                    continue;
+                }
+
+                var kingdom = item.TryGetProperty("kingdom", out var k) ? k.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(kingdom) &&
+                    !string.Equals(kingdom, "Plantae", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var species = new ExternalSpeciesResult
+                {
+                    ScientificName = scientific,
+                    CommonName = item.TryGetProperty("canonicalName", out var cn) ? cn.GetString() : null,
+                    ChineseName = ContainsCjk(originalKeyword) ? originalKeyword : null,
+                    Genus = item.TryGetProperty("genus", out var genus) ? genus.GetString() : null,
+                    Family = item.TryGetProperty("family", out var family) ? family.GetString() : null,
+                    TaxonId = item.TryGetProperty("key", out var id) ? id.GetRawText()
+                        : item.TryGetProperty("nubKey", out var nub) ? nub.GetRawText() : null,
+                    SourceType = "GBIF",
+                    SourceId = item.TryGetProperty("key", out var sid) ? sid.GetRawText() : string.Empty,
+                    Provider = "GBIF"
+                };
+
+                TryAddCandidate(bag, species, originalKeyword);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "GBIF candidate collect failed for {Term}", searchTerm);
+        }
+    }
+
+    private static void TryAddCandidate(
+        Dictionary<string, ExternalSpeciesResult> bag,
+        ExternalSpeciesResult species,
+        string originalKeyword)
+    {
+        var key = ScientificNameNormalizer.Normalize(species.ScientificName);
+        if (string.IsNullOrWhiteSpace(key) || bag.ContainsKey(key) || bag.Count >= 3)
+        {
+            return;
+        }
+
+        if (ContainsCjk(originalKeyword))
+        {
+            species.ChineseName ??= originalKeyword;
+        }
+
+        // Prefer keeping iNaturalist when duplicate arrives later from GBIF (already guarded by ContainsKey).
+        bag[key] = species;
+    }
+
     private async Task<ExternalSpeciesResult?> ResolveSpeciesAsync(string searchTerm, string originalKeyword, CancellationToken cancellationToken)
     {
         var trefle = await SearchTrefleAsync(searchTerm, cancellationToken);

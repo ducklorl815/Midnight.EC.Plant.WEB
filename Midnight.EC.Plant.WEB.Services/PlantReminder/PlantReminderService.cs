@@ -67,24 +67,43 @@ public class PlantReminderService : IPlantReminderService
         var analyses = await LoadLatestAnalysesAsync(plantIds, cancellationToken);
         var covers = await LoadCoverPathsAsync(plantIds, cancellationToken);
         var lastWateringDates = await _careRepository.GetLastWateringDatesAsync(plantIds, cancellationToken);
-        var today = DateTime.UtcNow.Date;
+        var today = DateTime.Today;
 
-        return plants.Select(plant =>
+        var items = new List<PlantDashboardItemDto>();
+        foreach (var plant in plants)
         {
             var plantReminders = reminders.Where(r => r.PlantId == plant.Id).ToList();
             lastWateringDates.TryGetValue(plant.Id, out var lastWateringDate);
-            int? daysSinceWatering = lastWateringDates.ContainsKey(plant.Id)
+            var hasWatering = lastWateringDates.ContainsKey(plant.Id);
+            int? daysSinceWatering = hasWatering
                 ? (today - lastWateringDate.Date).Days
                 : null;
             var chineseName = plant.Species?.ChineseName;
             var scientificName = plant.Species?.ScientificName;
+            var profile = await _profileRepository.GetByPlantIdAsync(plant.Id, cancellationToken);
+            var interval = profile?.WateringIntervalDays
+                ?? InferWateringIntervalDays(plant.Species?.Knowledge?.WaterRequirement);
+            var isOverdue = hasWatering && daysSinceWatering.HasValue && daysSinceWatering.Value >= interval;
+            var knowledge = plant.Species?.Knowledge;
+            var suggestedLight = profile?.OverrideSuggestedLight ?? knowledge?.SuggestedLight
+                ?? LightLevelDisplay.TryParseFromText(knowledge?.LightRequirement);
+            var knowledgeIncomplete = knowledge == null
+                || suggestedLight == null
+                || string.Equals(scientificName, "未確認", StringComparison.Ordinal);
+            var environmentIncomplete =
+                profile == null
+                || profile.ActualPlacement == null
+                || profile.ActualLight == null
+                || profile.HasRainCover == null
+                || string.IsNullOrWhiteSpace(profile.SubstrateType)
+                || string.IsNullOrWhiteSpace(profile.City);
 
-            return new PlantDashboardItemDto
+            items.Add(new PlantDashboardItemDto
             {
                 Id = plant.Id,
                 Name = plant.Name,
                 NickName = plant.NickName,
-                DisplayName = !string.IsNullOrWhiteSpace(plant.NickName) ? plant.NickName : plant.Name,
+                DisplayName = !string.IsNullOrWhiteSpace(plant.NickName) ? plant.NickName! : plant.Name,
                 SpeciesName = chineseName ?? plant.Species?.CommonName ?? scientificName,
                 SpeciesChineseName = chineseName,
                 SpeciesScientificName = scientificName,
@@ -94,10 +113,20 @@ public class PlantReminderService : IPlantReminderService
                 ActiveReminderCount = plantReminders.Count,
                 OverdueReminderCount = plantReminders.Count(r => r.DueDate.Date < today),
                 TopReminders = plantReminders.Take(3).Select(r => r.ToDto(plant.Name)).ToList(),
-                LastWateringDate = lastWateringDates.ContainsKey(plant.Id) ? lastWateringDate : null,
-                DaysSinceLastWatering = daysSinceWatering
-            };
-        }).ToList();
+                LastWateringDate = hasWatering ? lastWateringDate : null,
+                DaysSinceLastWatering = daysSinceWatering,
+                WateringIntervalDays = interval,
+                IsWateringOverdue = isOverdue,
+                MissingLastWateringDate = !hasWatering,
+                KnowledgeIncomplete = knowledgeIncomplete,
+                EnvironmentIncomplete = environmentIncomplete,
+                ActualLightLabel = profile?.ActualLight is { } light
+                    ? LightLevelDisplay.ToLabel(light)
+                    : null
+            });
+        }
+
+        return items;
     }
 
     public async Task SyncRemindersAsync(int? plantId, CancellationToken cancellationToken = default)

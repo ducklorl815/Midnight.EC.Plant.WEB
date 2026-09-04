@@ -37,6 +37,20 @@ public class ExternalPlantSearchResult
     public string? IdentificationSource { get; set; }
 }
 
+public static class ScientificNameNormalizer
+{
+    public static string Normalize(string? scientificName)
+    {
+        if (string.IsNullOrWhiteSpace(scientificName))
+        {
+            return string.Empty;
+        }
+
+        var collapsed = string.Join(' ', scientificName.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return collapsed.ToLowerInvariant();
+    }
+}
+
 public class PlantIdentificationResult
 {
     public string ScientificName { get; set; } = string.Empty;

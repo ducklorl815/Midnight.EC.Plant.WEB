@@ -1,0 +1,104 @@
+@model Midnight.EC.Plant.WEB.ViewModels.PlantProfileViewModel
+@using Midnight.EC.Plant.WEB.Models.Enums
+@{
+    ViewData["Title"] = "補實際環境";
+    var plantId = (int)(ViewBag.PlantId ?? 0);
+    var displayName = ViewBag.DisplayName as string ?? "植栽";
+}
+
+<div class="mb-3">
+    <a asp-action="Details" asp-route-id="@plantId" class="text-muted text-decoration-none">&larr; 返回 @displayName</a>
+</div>
+
+<div class="page-header mb-4">
+    <h1 class="page-title">補實際環境</h1>
+    <p class="page-subtitle">五項齊了才算完成。若與建議衝突，需勾選「我知道」才能存。</p>
+</div>
+
+@if (Model.SuggestedLight.HasValue || Model.CareTaboos.Any())
+{
+    <div class="alert alert-info">
+        @if (Model.SuggestedLight.HasValue)
+        {
+            <div>建議日照：<strong>@Model.SuggestedLightLabel</strong></div>
+        }
+        @if (Model.CareTaboos.Any())
+        {
+            <div>禁忌：@string.Join("、", Model.CareTaboos)</div>
+        }
+    </div>
+}
+
+<form asp-action="EditEnvironment" asp-route-id="@plantId" method="post" class="panel">
+    @Html.AntiForgeryToken()
+    <div class="panel-body">
+        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label asp-for="ActualPlacement" class="form-label"></label>
+                <select asp-for="ActualPlacement" class="form-select" asp-items="Html.GetEnumSelectList<PlacementType>()">
+                    <option value="">— 請選擇 —</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="ActualLight" class="form-label"></label>
+                <select asp-for="ActualLight" class="form-select">
+                    <option value="">— 請選擇 —</option>
+                    <option value="@((int)LightLevel.None)">@LightLevelDisplay.ToLabel(LightLevel.None)</option>
+                    <option value="@((int)LightLevel.Diffuse)">@LightLevelDisplay.ToLabel(LightLevel.Diffuse)</option>
+                    <option value="@((int)LightLevel.HalfDay)">@LightLevelDisplay.ToLabel(LightLevel.HalfDay)</option>
+                    <option value="@((int)LightLevel.FullSun)">@LightLevelDisplay.ToLabel(LightLevel.FullSun)</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="HasRainCover" class="form-label"></label>
+                <select asp-for="HasRainCover" class="form-select">
+                    <option value="">— 請選擇 —</option>
+                    <option value="true">有遮雨</option>
+                    <option value="false">無遮雨</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label asp-for="SubstrateType" class="form-label"></label>
+                <input asp-for="SubstrateType" class="form-control" placeholder="例如：疏水顆粒土、泥炭混合" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="City" class="form-label"></label>
+                <select asp-for="City" class="form-select">
+                    <option value="">— 請選擇縣市 —</option>
+                    @foreach (var city in TaiwanCities.All)
+                    {
+                        <option value="@city">@city</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @if (Model.MismatchWarnings.Any())
+        {
+            <div class="alert alert-warning mt-3">
+                <strong>環境落差：</strong>
+                <ul class="mb-0">
+                    @foreach (var w in Model.MismatchWarnings)
+                    {
+                        <li>@w</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <div class="form-check mt-3">
+            <input asp-for="AcknowledgeMismatch" class="form-check-input" />
+            <label asp-for="AcknowledgeMismatch" class="form-check-label"></label>
+        </div>
+
+        <div class="mt-3 d-flex gap-2">
+            <button type="submit" class="btn btn-plant-primary">儲存環境</button>
+            <a asp-action="Details" asp-route-id="@plantId" class="btn btn-outline-secondary">取消</a>
+            <a asp-action="Details" asp-route-id="@plantId" class="btn btn-outline-primary">去單盆補知識／同步</a>
+        </div>
+    </div>
+</form>
+
+<p class="text-muted small mt-3">位置備註（客廳／窗台）請在「編輯」頁的位置欄填寫，不參與落差警告。</p>

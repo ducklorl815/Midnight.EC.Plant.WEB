@@ -66,6 +66,7 @@ public class PlantReminderService : IPlantReminderService
         var reminders = await _reminderRepository.GetActiveForPlantsAsync(plantIds, cancellationToken);
         var analyses = await LoadLatestAnalysesAsync(plantIds, cancellationToken);
         var covers = await LoadCoverPathsAsync(plantIds, cancellationToken);
+        var latestVisual = await LoadLatestVisualActivityAsync(plantIds, cancellationToken);
         var lastWateringDates = await _careRepository.GetLastWateringDatesAsync(plantIds, cancellationToken);
         var today = DateTime.Today;
 
@@ -109,6 +110,7 @@ public class PlantReminderService : IPlantReminderService
                 SpeciesScientificName = scientificName,
                 Location = plant.Location,
                 CoverImagePath = covers.GetValueOrDefault(plant.Id),
+                LatestVisualActivityAt = latestVisual.TryGetValue(plant.Id, out var visualAt) ? visualAt : null,
                 LatestHealthScore = analyses.GetValueOrDefault(plant.Id)?.HealthScore,
                 ActiveReminderCount = plantReminders.Count,
                 OverdueReminderCount = plantReminders.Count(r => r.DueDate.Date < today),
@@ -369,6 +371,24 @@ public class PlantReminderService : IPlantReminderService
             if (cover != null)
             {
                 result[id] = _imageStorageService.GetPublicPath(cover.StoragePath);
+            }
+        }
+
+        return result;
+    }
+
+    private async Task<Dictionary<int, DateTime>> LoadLatestVisualActivityAsync(
+        IEnumerable<int> plantIds,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<int, DateTime>();
+        foreach (var id in plantIds)
+        {
+            var images = await _imageRepository.GetByPlantIdAsync(id, cancellationToken);
+            var latest = images.OrderByDescending(i => i.CreatedAt).FirstOrDefault();
+            if (latest != null)
+            {
+                result[id] = latest.CreatedAt;
             }
         }
 

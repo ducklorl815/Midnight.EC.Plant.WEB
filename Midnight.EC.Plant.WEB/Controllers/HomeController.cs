@@ -15,7 +15,7 @@ namespace Midnight.EC.Plant.WEB.Controllers
 
         public IActionResult Index()
         {
-            return View();
+            return RedirectToAction("Index", "Plant");
         }
 
         public IActionResult Privacy()

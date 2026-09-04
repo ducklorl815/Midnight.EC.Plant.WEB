@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = Model.DisplayName;
     var fertilizerHint = Model.Knowledge?.FertilizerRequirement;
+    var locationText = Model.Location;
 }
 
 <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -29,7 +30,7 @@
     <div class="alert alert-success">@successMessage</div>
 }
 
-<section class="plant-hero mb-4">
+<section class="plant-hero">
     <div class="plant-hero-cover">
         @if (!string.IsNullOrWhiteSpace(Model.CoverImagePath))
         {
@@ -39,59 +40,69 @@
         {
             <div class="plant-hero-placeholder">
                 <span>🌿</span>
-                <small>尚未設定封面，可在下方照片上傳並設為封面</small>
+                <small>尚未設定封面</small>
             </div>
         }
     </div>
     <div class="plant-hero-info">
         <h1 class="plant-hero-title">@Model.DisplayName</h1>
-        <p class="plant-hero-meta">
+        <p class="plant-hero-meta mb-1">
             @if (!string.IsNullOrWhiteSpace(Model.SpeciesChineseName))
             {
-                <span>@Model.SpeciesChineseName</span>
+                @Model.SpeciesChineseName
             }
             else if (!string.IsNullOrWhiteSpace(Model.SpeciesName))
             {
-                <span>@Model.SpeciesName</span>
+                @Model.SpeciesName
             }
             else
             {
-                <span>未知物種</span>
+                <text>未知物種</text>
             }
         </p>
         @if (!string.IsNullOrWhiteSpace(Model.SpeciesScientificName))
         {
             <p class="plant-hero-scientific">@Model.SpeciesScientificName</p>
         }
-        @if (!string.IsNullOrWhiteSpace(Model.Location))
+        @if (!string.IsNullOrWhiteSpace(locationText))
         {
-            <p class="plant-hero-location">📍 @Model.Location</p>
+            <p class="plant-hero-location">@locationText</p>
         }
-        @if (Model.DaysSinceLastWatering.HasValue)
-        {
-            <div class="plant-hero-watering">💧 距上次澆水已過 @Model.DaysSinceLastWatering 天</div>
-        }
-        @if (Model.LatestHealthScore.HasValue)
-        {
-            <span class="health-badge health-badge-@(Model.LatestHealthScore >= 70 ? "good" : Model.LatestHealthScore >= 50 ? "warn" : "bad")">
-                健康度 @Model.LatestHealthScore
-            </span>
-        }
-        <div class="mt-2 d-flex flex-wrap gap-2">
-            <a asp-action="EditEnvironment" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-primary">補實際環境</a>
+        <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+            @if (Model.DaysSinceLastWatering.HasValue)
+            {
+                <span class="status-pill status-pill-action">距上次澆水 @Model.DaysSinceLastWatering 天</span>
+            }
+            else
+            {
+                <span class="status-pill status-pill-muted">尚無澆水紀錄</span>
+            }
+            @if (Model.LatestHealthScore.HasValue)
+            {
+                <span class="health-badge health-badge-@(Model.LatestHealthScore >= 70 ? "good" : Model.LatestHealthScore >= 50 ? "warn" : "bad")">
+                    健康度 @Model.LatestHealthScore
+                </span>
+            }
+        </div>
+        <div class="plant-hero-actions">
+            <a href="#today-log" class="btn btn-sm btn-plant-primary">記今日紀錄</a>
+            <a asp-action="EditEnvironment" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-secondary">補實際環境</a>
         </div>
     </div>
 </section>
 
-<section class="panel mb-4">
-    <div class="panel-header"><strong>今日紀錄</strong> <span class="text-muted small">永遠記今天 · 照片可選</span></div>
+<section id="today-log" class="panel mb-4">
+    <div class="panel-header">
+        <strong>今日紀錄</strong>
+        <span class="text-muted small">永遠記今天 · 照片可選</span>
+    </div>
     <div class="panel-body">
         <form asp-action="SaveTodayLog" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
             <div class="d-flex flex-wrap gap-3 align-items-center mb-3">
                 <div class="form-check">
                     <input asp-for="TodayLog.Watered" class="form-check-input" />
-                    <label asp-for="TodayLog.Watered" class="form-check-label">已澆水</label>
+                    <label asp-for="TodayLog.Watered" class="form-check-label fw-semibold">已澆水</label>
                 </div>
                 <div class="form-check">
                     <input asp-for="TodayLog.Fertilized" class="form-check-input" />
@@ -112,8 +123,11 @@
     </div>
 </section>
 
-<section class="panel mb-4">
-    <div class="panel-header"><strong>補記某日</strong> <span class="text-muted small">只能過去 · 不限多久以前</span></div>
+<section class="panel panel-quiet mb-4">
+    <div class="panel-header">
+        <strong>補記某日</strong>
+        <span class="text-muted small">只能過去 · 不限多久以前</span>
+    </div>
     <div class="panel-body">
         <form asp-action="BackfillLog" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" class="row g-3 align-items-end">
             @Html.AntiForgeryToken()
@@ -138,7 +152,7 @@
                 <input asp-for="BackfillLog.Note" class="form-control" placeholder="可選" />
             </div>
             <div class="col-md-2">
-                <button type="submit" class="btn btn-outline-primary w-100">補記</button>
+                <button type="submit" class="btn btn-outline-secondary w-100">補記</button>
             </div>
             <div class="col-12">
                 <input type="file" name="photos" class="form-control form-control-sm" accept="image/*" multiple />
@@ -147,116 +161,10 @@
     </div>
 </section>
 
-@if (Model.Reminders.Any())
-{
-    <section class="panel panel-reminder mb-4">
-        <div class="panel-header"><strong>智慧提醒</strong></div>
-        <div class="panel-body p-0">
-            <ul class="list-group list-group-flush">
-                @foreach (var reminder in Model.Reminders)
-                {
-                    <li class="list-group-item d-flex justify-content-between align-items-start gap-3">
-                        <div>
-                            <div class="fw-semibold @(reminder.IsOverdue ? "text-danger" : string.Empty)">
-                                @reminder.Title
-                            </div>
-                            @if (!string.IsNullOrWhiteSpace(reminder.Message))
-                            {
-                                <div class="small text-muted mt-1">@reminder.Message</div>
-                            }
-                            <div class="small text-muted">到期：@reminder.DueDate.ToString("yyyy/MM/dd")</div>
-                        </div>
-                        <form asp-action="DismissReminder" asp-route-id="@Model.Id" asp-route-reminderId="@reminder.Id" method="post">
-                            @Html.AntiForgeryToken()
-                            <button type="submit" class="btn btn-sm btn-outline-secondary">略過</button>
-                        </form>
-                    </li>
-                }
-            </ul>
-        </div>
-    </section>
-}
-
-<div class="row g-4 mb-4">
-    <div class="col-lg-7">
-        <section class="panel h-100">
-            <div class="panel-header">
-                <strong>官方栽培說明</strong>
-                <span class="badge-soft">外部來源整合</span>
-            </div>
-            <div class="panel-body">
-                @if (!string.IsNullOrWhiteSpace(Model.Knowledge?.ExternalCareGuide))
-                {
-                    <div class="care-guide-text">@Model.Knowledge.ExternalCareGuide</div>
-                }
-                else if (Model.Knowledge != null && !Model.Knowledge.IsSparse)
-                {
-                    <div class="care-facts">
-                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.LightRequirement)) { <div><span>光照</span>@Model.Knowledge.LightRequirement</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.WaterRequirement)) { <div><span>澆水</span>@Model.Knowledge.WaterRequirement</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.SoilRequirement)) { <div><span>土壤</span>@Model.Knowledge.SoilRequirement</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.FertilizerRequirement)) { <div><span>施肥</span>@Model.Knowledge.FertilizerRequirement</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.TemperatureRange)) { <div><span>溫度</span>@Model.Knowledge.TemperatureRange</div> }
-                    </div>
-                }
-                else
-                {
-                    <p class="text-muted mb-3">尚無官方說明，請在右側同步外部資料。</p>
-                }
-
-                @if (!string.IsNullOrWhiteSpace(Model.Description))
-                {
-                    <hr class="my-3" />
-                    <div class="small text-muted mb-1">我的備註</div>
-                    <p class="mb-0">@Model.Description</p>
-                }
-            </div>
-        </section>
-    </div>
-
-    <div class="col-lg-5">
-        <section class="panel mb-4">
-            <div class="panel-header"><strong>同步官方資料</strong></div>
-            <div class="panel-body">
-                <form asp-action="SyncKnowledge" asp-route-id="@Model.Id" method="post">
-                    @Html.AntiForgeryToken()
-                    <label asp-for="SyncKnowledge.SpeciesKeyword" class="form-label"></label>
-                    <input asp-for="SyncKnowledge.SpeciesKeyword" class="form-control mb-2" placeholder="例如：玉露錦" />
-                    <button type="submit" class="btn btn-plant-primary btn-sm w-100">同步外部 API</button>
-                </form>
-            </div>
-        </section>
-
-        <section class="panel">
-            <div class="panel-header"><strong>個人化設定</strong></div>
-            <div class="panel-body">
-                <form asp-action="SaveProfile" asp-route-id="@Model.Id" method="post">
-                    @Html.AntiForgeryToken()
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <label asp-for="Profile.WateringIntervalDays" class="form-label small"></label>
-                            <input asp-for="Profile.WateringIntervalDays" class="form-control form-control-sm" type="number" min="1" />
-                        </div>
-                        <div class="col-6">
-                            <label asp-for="Profile.FertilizingIntervalDays" class="form-label small"></label>
-                            <input asp-for="Profile.FertilizingIntervalDays" class="form-control form-control-sm" type="number" min="1" />
-                        </div>
-                        <div class="col-12">
-                            <label asp-for="Profile.PersonalCareNotes" class="form-label small"></label>
-                            <input asp-for="Profile.PersonalCareNotes" class="form-control form-control-sm" />
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-outline-success btn-sm mt-3">儲存設定</button>
-                </form>
-            </div>
-        </section>
-    </div>
-</div>
-
 <section class="panel mb-4">
     <div class="panel-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <strong>我的植栽照片</strong>
-        <span class="text-muted small">上傳照片 + 備註，可針對每張執行 AI 分析</span>
+        <strong>照片與日記</strong>
+        <span class="text-muted small">上傳後可對單張做 AI 分析</span>
     </div>
     <div class="panel-body">
         <form asp-action="UploadPhoto" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" class="upload-panel mb-4">
@@ -282,7 +190,7 @@
 
         @if (!Model.Photos.Any())
         {
-            <p class="text-muted mb-0">尚無照片。上傳後可在下方查看，並針對每張照片執行 AI 草況分析。</p>
+            <p class="text-muted mb-0">尚無照片。上傳後會出現在照片牆，也可做 AI 草況分析。</p>
         }
         else
         {
@@ -326,7 +234,7 @@
 
                             <div class="photo-card-actions">
                                 <button type="button" class="btn btn-sm btn-plant-primary analyze-photo-btn" data-plant-id="@Model.Id" data-image-id="@photo.Id">
-                                    🤖 AI 分析
+                                    AI 分析
                                 </button>
                                 @if (!photo.IsCover)
                                 {
@@ -380,7 +288,7 @@
                 </div>
                 <div class="col-md-3">
                     <label asp-for="NewCareRecord.Note" class="form-label"></label>
-                    <input asp-for="NewCareRecord.Note" class="form-control" placeholder="例如：薄肥勤施、氮磷鉀均衡" />
+                    <input asp-for="NewCareRecord.Note" class="form-control" placeholder="例如：薄肥勤施" />
                 </div>
                 <div class="col-md-1">
                     <button type="submit" class="btn btn-plant-primary w-100">新增</button>
@@ -418,6 +326,117 @@
         }
     </div>
 </section>
+
+@if (Model.Reminders.Any())
+{
+    <section class="panel panel-reminder mb-4">
+        <div class="panel-header"><strong>智慧提醒</strong></div>
+        <div class="panel-body p-0">
+            <ul class="list-group list-group-flush">
+                @foreach (var reminder in Model.Reminders)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <div class="fw-semibold @(reminder.IsOverdue ? "text-danger" : string.Empty)">
+                                @reminder.Title
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(reminder.Message))
+                            {
+                                <div class="small text-muted mt-1">@reminder.Message</div>
+                            }
+                            <div class="small text-muted">到期：@reminder.DueDate.ToString("yyyy/MM/dd")</div>
+                        </div>
+                        <form asp-action="DismissReminder" asp-route-id="@Model.Id" asp-route-reminderId="@reminder.Id" method="post">
+                            @Html.AntiForgeryToken()
+                            <button type="submit" class="btn btn-sm btn-outline-secondary">略過</button>
+                        </form>
+                    </li>
+                }
+            </ul>
+        </div>
+    </section>
+}
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-7">
+        <section class="panel h-100">
+            <div class="panel-header">
+                <strong>知識與照護說明</strong>
+                <span class="badge-soft">外部來源</span>
+            </div>
+            <div class="panel-body">
+                @if (!string.IsNullOrWhiteSpace(Model.Knowledge?.ExternalCareGuide))
+                {
+                    <div class="care-guide-text">@Model.Knowledge.ExternalCareGuide</div>
+                }
+                else if (Model.Knowledge != null && !Model.Knowledge.IsSparse)
+                {
+                    <div class="care-facts">
+                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.LightRequirement)) { <div><span>光照</span>@Model.Knowledge.LightRequirement</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.WaterRequirement)) { <div><span>澆水</span>@Model.Knowledge.WaterRequirement</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.SoilRequirement)) { <div><span>土壤</span>@Model.Knowledge.SoilRequirement</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.FertilizerRequirement)) { <div><span>施肥</span>@Model.Knowledge.FertilizerRequirement</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.TemperatureRange)) { <div><span>溫度</span>@Model.Knowledge.TemperatureRange</div> }
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted mb-3">尚無官方說明，可在下方進階區同步外部資料。</p>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(Model.Description))
+                {
+                    <hr class="my-3" />
+                    <div class="small text-muted mb-1">我的備註</div>
+                    <p class="mb-0">@Model.Description</p>
+                }
+
+                <div class="mt-3">
+                    <a asp-action="EditEnvironment" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-secondary">編輯實際環境</a>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="col-lg-5">
+        <p class="section-label">進階</p>
+        <section class="panel mb-4">
+            <div class="panel-header"><strong>同步官方資料</strong></div>
+            <div class="panel-body">
+                <form asp-action="SyncKnowledge" asp-route-id="@Model.Id" method="post">
+                    @Html.AntiForgeryToken()
+                    <label asp-for="SyncKnowledge.SpeciesKeyword" class="form-label"></label>
+                    <input asp-for="SyncKnowledge.SpeciesKeyword" class="form-control mb-2" placeholder="例如：玉露錦" />
+                    <button type="submit" class="btn btn-outline-emphasis btn-sm w-100">同步外部 API</button>
+                </form>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header"><strong>個人化設定</strong></div>
+            <div class="panel-body">
+                <form asp-action="SaveProfile" asp-route-id="@Model.Id" method="post">
+                    @Html.AntiForgeryToken()
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label asp-for="Profile.WateringIntervalDays" class="form-label small"></label>
+                            <input asp-for="Profile.WateringIntervalDays" class="form-control form-control-sm" type="number" min="1" />
+                        </div>
+                        <div class="col-6">
+                            <label asp-for="Profile.FertilizingIntervalDays" class="form-label small"></label>
+                            <input asp-for="Profile.FertilizingIntervalDays" class="form-control form-control-sm" type="number" min="1" />
+                        </div>
+                        <div class="col-12">
+                            <label asp-for="Profile.PersonalCareNotes" class="form-label small"></label>
+                            <input asp-for="Profile.PersonalCareNotes" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-brand btn-sm mt-3">儲存設定</button>
+                </form>
+            </div>
+        </section>
+    </div>
+</div>
 
 @section Scripts {
     <script>

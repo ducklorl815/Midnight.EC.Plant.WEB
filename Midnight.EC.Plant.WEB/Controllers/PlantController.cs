@@ -158,6 +158,7 @@ public class PlantController : Controller
         SpeciesScientificName = p.SpeciesScientificName,
         Location = p.Location,
         CoverImagePath = p.CoverImagePath,
+        LatestVisualActivityAt = p.LatestVisualActivityAt,
         LatestHealthScore = p.LatestHealthScore,
         ActiveReminderCount = p.ActiveReminderCount,
         OverdueReminderCount = p.OverdueReminderCount,

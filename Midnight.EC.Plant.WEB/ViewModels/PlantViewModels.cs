@@ -24,6 +24,7 @@ public class PlantDashboardCardViewModel
     public string? SpeciesScientificName { get; set; }
     public string? Location { get; set; }
     public string? CoverImagePath { get; set; }
+    public DateTime? LatestVisualActivityAt { get; set; }
     public int? LatestHealthScore { get; set; }
     public int ActiveReminderCount { get; set; }
     public int OverdueReminderCount { get; set; }

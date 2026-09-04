@@ -144,6 +144,8 @@ public class PlantDashboardItemDto
     public string? SpeciesScientificName { get; set; }
     public string? Location { get; set; }
     public string? CoverImagePath { get; set; }
+    /// <summary>最近一張照片時間；無照片時為 null，照片牆排序用。</summary>
+    public DateTime? LatestVisualActivityAt { get; set; }
     public int? LatestHealthScore { get; set; }
     public int ActiveReminderCount { get; set; }
     public int OverdueReminderCount { get; set; }

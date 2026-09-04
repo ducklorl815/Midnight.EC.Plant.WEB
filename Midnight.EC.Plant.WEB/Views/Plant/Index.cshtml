@@ -2,14 +2,21 @@
 
 @{
     ViewData["Title"] = "首頁";
+    var hasAction = Model.OverdueWatering.Any();
+    var hasTodoFill = Model.MissingWateringDate.Any() || Model.IncompleteData.Any();
+    var wallPlants = Model.Plants
+        .OrderByDescending(p => !string.IsNullOrWhiteSpace(p.CoverImagePath))
+        .ThenByDescending(p => p.LatestVisualActivityAt ?? DateTime.MinValue)
+        .ThenBy(p => p.DisplayName)
+        .ToList();
 }
 
 <div class="page-header d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
-        <h1 class="page-title mb-1">首頁</h1>
-        <p class="page-subtitle mb-0">置頂待辦：逾期澆水 → 催補日期 → 資料未完成；下方植物牆。</p>
+        <h1 class="page-title mb-1">我的植栽</h1>
+        <p class="page-subtitle mb-0">先處理今日行動，再逛照片牆。</p>
     </div>
-    <a asp-action="Create" class="btn btn-plant-primary">+ 新增植栽</a>
+    <a asp-action="Create" class="btn btn-plant-primary">新增植栽</a>
 </div>
 
 @if (TempData["Error"] is string err)
@@ -25,195 +32,146 @@
 {
     <div class="empty-state">
         <div class="empty-state-icon">🌱</div>
-        <h2>尚未建立任何植物</h2>
+        <h2>尚未建立任何植栽</h2>
         <p class="text-muted">新增第一盆；想到澆水再建檔即可。</p>
         <a asp-action="Create" class="btn btn-plant-primary">新增植栽</a>
     </div>
 }
 else
 {
-    <section class="panel mb-4">
-        <div class="panel-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <strong>① 澆水逾期（已經超過提醒週期）</strong>
-            <span class="text-muted small">@(Model.OverdueWatering.Count) 盆 · 沒澆越久越上面</span>
-        </div>
-        <div class="panel-body">
-            @if (!Model.OverdueWatering.Any())
-            {
-                <p class="text-muted mb-0">目前沒有逾期澆水。</p>
-            }
-            else
-            {
-                <form asp-action="BatchWater" method="post">
-                    @Html.AntiForgeryToken()
-                    <div class="table-responsive">
-                        <table class="table align-middle mb-3">
-                            <thead>
-                                <tr>
-                                    <th style="width:2.5rem;"></th>
-                                    <th>暱稱</th>
-                                    <th>已經幾天沒澆</th>
-                                    <th>提醒週期</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            @foreach (var p in Model.OverdueWatering)
-                            {
-                                <tr>
-                                    <td>
-                                        <input type="checkbox" class="form-check-input" name="plantIds" value="@p.Id" checked />
-                                    </td>
-                                    <td>
-                                        <a asp-action="Details" asp-route-id="@p.Id">@p.DisplayName</a>
-                                        @if (!string.IsNullOrWhiteSpace(p.SpeciesChineseName))
-                                        {
-                                            <div class="small text-muted">@p.SpeciesChineseName</div>
-                                        }
-                                    </td>
-                                    <td class="fw-semibold text-danger">已經 @(p.DaysSinceLastWatering) 天沒澆</td>
-                                    <td>每 @p.WateringIntervalDays 天</td>
-                                    <td><a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-outline-secondary">單盆</a></td>
-                                </tr>
-                            }
-                            </tbody>
-                        </table>
-                    </div>
-                    <button type="submit" class="btn btn-plant-primary">批次已澆水（整批記今天）</button>
-                    <span class="text-muted small ms-2">不勾選 = 略過（仍留在逾期）</span>
-                </form>
-            }
-        </div>
-    </section>
+    @if (hasAction)
+    {
+        <section class="action-zone" aria-labelledby="action-zone-title">
+            <div class="action-zone-header">
+                <h2 id="action-zone-title" class="action-zone-title">今日行動</h2>
+                <span class="text-muted small">@Model.OverdueWatering.Count 盆澆水逾期</span>
+            </div>
 
-    <section class="panel mb-4">
-        <div class="panel-header">
-            <strong>② 催補上次澆水日</strong>
-        </div>
-        <div class="panel-body">
-            @if (!Model.MissingWateringDate.Any())
-            {
-                <p class="text-muted mb-0">沒有缺澆水起點的盆。</p>
-            }
-            else
-            {
-                <div class="list-group list-group-flush">
-                    @foreach (var p in Model.MissingWateringDate)
+            <form asp-action="BatchWater" method="post" id="batch-water-form">
+                @Html.AntiForgeryToken()
+                <div class="action-card-list">
+                    @foreach (var p in Model.OverdueWatering)
                     {
-                        <div class="list-group-item px-0">
-                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                                <div>
-                                    <a asp-action="Details" asp-route-id="@p.Id" class="fw-semibold">@p.DisplayName</a>
-                                    <div class="small text-muted">不進逾期計算，請先補日期</div>
-                                </div>
-                                <form asp-action="SetLastWateringDate" method="post" class="d-flex flex-wrap gap-2 align-items-center">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="plantId" value="@p.Id" />
-                                    <input type="date" name="lastWateringDate" class="form-control form-control-sm" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
-                                    <button type="submit" class="btn btn-sm btn-outline-primary">儲存</button>
-                                </form>
+                        var checkId = $"plant-check-{p.Id}";
+                        <div class="action-card">
+                            <input type="checkbox" class="form-check-input action-card-check" name="plantIds" value="@p.Id" id="@checkId" checked />
+                            <label class="action-card-body" for="@checkId">
+                                <span class="action-card-name">@p.DisplayName</span>
+                                @if (!string.IsNullOrWhiteSpace(p.SpeciesChineseName))
+                                {
+                                    <div class="action-card-meta">@p.SpeciesChineseName · 每 @p.WateringIntervalDays 天</div>
+                                }
+                                else
+                                {
+                                    <div class="action-card-meta">每 @p.WateringIntervalDays 天</div>
+                                }
+                            </label>
+                            <div class="action-card-days">已經 @(p.DaysSinceLastWatering) 天沒澆</div>
+                            <a asp-action="Details" asp-route-id="@p.Id" class="btn btn-sm btn-outline-secondary">單盆</a>
+                        </div>
+                    }
+                </div>
+
+                <div class="batch-bar batch-bar-sticky">
+                    <button type="submit" class="btn btn-plant-primary flex-grow-1 flex-sm-grow-0">批次已澆水（記今天）</button>
+                    <span class="text-muted small">取消勾選＝這次略過</span>
+                </div>
+            </form>
+        </section>
+    }
+
+    @if (hasTodoFill)
+    {
+        <section class="todo-fill panel panel-quiet" aria-labelledby="todo-fill-title">
+            <div class="panel-header">
+                <strong id="todo-fill-title">待補</strong>
+                <span class="text-muted small">@(Model.MissingWateringDate.Count + Model.IncompleteData.Count) 項</span>
+            </div>
+            <div class="panel-body">
+                @foreach (var p in Model.MissingWateringDate)
+                {
+                    <div class="todo-fill-item">
+                        <div>
+                            <a asp-action="Details" asp-route-id="@p.Id" class="fw-semibold">@p.DisplayName</a>
+                            <div class="small text-muted">缺上次澆水日起點（補了才會進逾期計算）</div>
+                        </div>
+                        <form asp-action="SetLastWateringDate" method="post" class="d-flex flex-wrap gap-2 align-items-center">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="plantId" value="@p.Id" />
+                            <input type="date" name="lastWateringDate" class="form-control form-control-sm" value="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                            <button type="submit" class="btn btn-sm btn-outline-emphasis">儲存</button>
+                        </form>
+                    </div>
+                }
+                @foreach (var p in Model.IncompleteData)
+                {
+                    <div class="todo-fill-item">
+                        <div>
+                            <a asp-action="EditEnvironment" asp-route-id="@p.Id" class="fw-semibold">@p.DisplayName</a>
+                            <div class="small text-muted mt-1">
+                                @if (p.KnowledgeIncomplete)
+                                {
+                                    <span class="badge-soft me-1">知識未完成</span>
+                                }
+                                @if (p.EnvironmentIncomplete)
+                                {
+                                    <span class="badge-soft">環境未完成</span>
+                                }
                             </div>
                         </div>
-                    }
-                </div>
+                        <a asp-action="EditEnvironment" asp-route-id="@p.Id" class="btn btn-sm btn-outline-secondary">去補環境</a>
+                    </div>
+                }
+            </div>
+        </section>
+    }
+
+    <section class="photo-wall" aria-labelledby="photo-wall-title">
+        <div class="photo-wall-header">
+            <h2 id="photo-wall-title" class="photo-wall-title">照片牆</h2>
+            <span class="text-muted small">@wallPlants.Count 盆</span>
+        </div>
+
+        <div class="photo-wall-grid">
+            @{
+                var i = 0;
+            }
+            @foreach (var plant in wallPlants)
+            {
+                var sizeClass = i == 0
+                    ? "wall-tile-hero"
+                    : i <= 2
+                        ? (i == 1 ? "wall-tile-wide" : "wall-tile-tall")
+                        : "";
+                i++;
+                <article class="wall-tile @sizeClass">
+                    <a asp-action="Details" asp-route-id="@plant.Id" class="wall-tile-link">
+                        <div class="wall-tile-media">
+                            @if (!string.IsNullOrWhiteSpace(plant.CoverImagePath))
+                            {
+                                <img src="@plant.CoverImagePath" alt="@plant.DisplayName" loading="lazy" />
+                            }
+                            else
+                            {
+                                <div class="wall-tile-placeholder">🌿</div>
+                            }
+                        </div>
+                        <div class="wall-tile-caption">
+                            <h3 class="wall-tile-name">@plant.DisplayName</h3>
+                            <div class="wall-tile-status">
+                                @if (plant.DaysSinceLastWatering.HasValue)
+                                {
+                                    <text>已經 @plant.DaysSinceLastWatering 天沒澆</text>
+                                }
+                                else
+                                {
+                                    <text>尚無澆水紀錄</text>
+                                }
+                            </div>
+                        </div>
+                    </a>
+                </article>
             }
         </div>
     </section>
-
-    <section class="panel mb-4">
-        <div class="panel-header">
-            <strong>③ 資料未完成</strong>
-            <span class="text-muted small ms-2">點進去先補環境（C 完成後）</span>
-        </div>
-        <div class="panel-body">
-            @if (!Model.IncompleteData.Any())
-            {
-                <p class="text-muted mb-0">沒有待補資料（或環境欄位尚未啟用）。</p>
-            }
-            else
-            {
-                <ul class="list-unstyled mb-0">
-                    @foreach (var p in Model.IncompleteData)
-                    {
-                        <li class="mb-2">
-                            <a asp-action="EditEnvironment" asp-route-id="@p.Id">@p.DisplayName</a>
-                            @if (p.KnowledgeIncomplete)
-                            {
-                                <span class="badge text-bg-warning ms-1">知識未完成</span>
-                            }
-                            @if (p.EnvironmentIncomplete)
-                            {
-                                <span class="badge text-bg-secondary ms-1">環境未完成</span>
-                            }
-                        </li>
-                    }
-                </ul>
-            }
-        </div>
-    </section>
-
-    <h2 class="h5 mb-3">植物牆</h2>
-    <div class="plant-grid">
-        @foreach (var plant in Model.Plants)
-        {
-            <article class="plant-card">
-                <a asp-action="Details" asp-route-id="@plant.Id" class="plant-card-link">
-                    <div class="plant-card-cover">
-                        @if (!string.IsNullOrWhiteSpace(plant.CoverImagePath))
-                        {
-                            <img src="@plant.CoverImagePath" alt="@plant.DisplayName" />
-                        }
-                        else
-                        {
-                            <div class="plant-card-cover-placeholder">🌿</div>
-                        }
-                    </div>
-                    <div class="plant-card-body">
-                        <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
-                            <h3 class="plant-card-title">@plant.DisplayName</h3>
-                            @if (plant.LatestHealthScore.HasValue)
-                            {
-                                <span class="health-badge health-badge-sm health-badge-@(plant.LatestHealthScore >= 70 ? "good" : plant.LatestHealthScore >= 50 ? "warn" : "bad")">
-                                    @plant.LatestHealthScore
-                                </span>
-                            }
-                        </div>
-                        @if (!string.IsNullOrWhiteSpace(plant.SpeciesChineseName))
-                        {
-                            <p class="plant-card-meta">@plant.SpeciesChineseName</p>
-                        }
-                        @if (plant.DaysSinceLastWatering.HasValue)
-                        {
-                            <div class="plant-card-watering">已經 @plant.DaysSinceLastWatering 天沒澆</div>
-                        }
-                        else
-                        {
-                            <div class="plant-card-watering plant-card-watering-none">尚無澆水紀錄</div>
-                        }
-                        @if (!string.IsNullOrWhiteSpace(plant.ActualLightLabel))
-                        {
-                            <div class="small text-muted">日照：@plant.ActualLightLabel</div>
-                        }
-                        <div class="mt-1">
-                            @if (plant.KnowledgeIncomplete)
-                            {
-                                <span class="badge text-bg-warning">知識未完成</span>
-                            }
-                            @if (plant.EnvironmentIncomplete)
-                            {
-                                <span class="badge text-bg-secondary">環境未完成</span>
-                            }
-                        </div>
-                    </div>
-                </a>
-                <div class="plant-card-footer">
-                    <a asp-action="Edit" asp-route-id="@plant.Id" class="btn btn-sm btn-outline-secondary">編輯</a>
-                    <form asp-action="Delete" asp-route-id="@plant.Id" method="post" class="d-inline" onsubmit="return confirm('確定封存此植栽？');">
-                        @Html.AntiForgeryToken()
-                        <button type="submit" class="btn btn-sm btn-outline-danger">封存</button>
-                    </form>
-                </div>
-            </article>
-        }
-    </div>
 }

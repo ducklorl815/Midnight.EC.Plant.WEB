@@ -1,13 +1,19 @@
 @model Midnight.EC.Plant.WEB.ViewModels.CreatePlantViewModel
 
 @{
-    ViewData["Title"] = "新增植物";
+    ViewData["Title"] = "新增植栽";
 }
 
-<div class="page-header mb-4">
-    <h1 class="page-title">新增植物</h1>
+<div class="page-header mb-3">
+    <h1 class="page-title">新增植栽</h1>
     <p class="page-subtitle">暱稱必填；中文名用來查物種。外部查詢失敗時仍可先建檔。</p>
 </div>
+
+<nav class="flow-steps" aria-label="新增步驟">
+    <span class="flow-step flow-step-active"><span class="flow-step-num">1</span> 基本資料</span>
+    <span class="flow-step"><span class="flow-step-num">2</span> 確認物種</span>
+    <span class="flow-step"><span class="flow-step-num">3</span> 完成</span>
+</nav>
 
 <div class="row justify-content-center">
     <div class="col-lg-8 col-xl-7">

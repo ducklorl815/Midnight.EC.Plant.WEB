@@ -10,10 +10,12 @@
 </head>
 <body>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-light border-bottom box-shadow mb-3">
+        <nav class="navbar navbar-expand-sm navbar-light mb-3">
             <div class="container">
-                <a class="navbar-brand" asp-controller="Plant" asp-action="Index">🌿 我的植栽</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+                <a class="navbar-brand" asp-controller="Plant" asp-action="Index">
+                    <span class="brand-mark" aria-hidden="true">🌿</span>我的植栽
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="選單">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="collapse navbar-collapse" id="mainNav">
@@ -40,7 +42,7 @@
 
     <footer class="border-top footer text-muted py-3 mt-auto">
         <div class="container text-center small">
-            &copy; 2026 我的植栽照護系統
+            &copy; 2026 我的植栽
         </div>
     </footer>
     <script src="~/lib/jquery/dist/jquery.min.js"></script>

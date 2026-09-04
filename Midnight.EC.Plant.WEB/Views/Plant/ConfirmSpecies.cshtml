@@ -4,13 +4,19 @@
     ViewData["Title"] = "確認物種";
 }
 
-<div class="page-header mb-4">
+<div class="page-header mb-3">
     <h1 class="page-title">確認物種</h1>
     <p class="page-subtitle">
         暱稱「@Model.Draft.NickName」／中文名「@Model.Draft.ChineseName」。
         @(Model.Candidates.Count == 0 ? "沒有候選，可手填學名或先建檔。" : "請確認後寫入（即使只有 1 筆也要確認）。")
     </p>
 </div>
+
+<nav class="flow-steps" aria-label="新增步驟">
+    <span class="flow-step flow-step-done"><span class="flow-step-num">✓</span> 基本資料</span>
+    <span class="flow-step flow-step-active"><span class="flow-step-num">2</span> 確認物種</span>
+    <span class="flow-step"><span class="flow-step-num">3</span> 完成</span>
+</nav>
 
 <div class="row justify-content-center">
     <div class="col-lg-9">
@@ -37,7 +43,7 @@
                                 }
                                 else
                                 {
-                                    <div class="bg-light rounded mb-2 d-flex align-items-center justify-content-center" style="height:100px;">無圖</div>
+                                    <div class="bg-light rounded mb-2 d-flex align-items-center justify-content-center text-muted" style="height:100px;">無圖</div>
                                 }
                                 <div class="small text-muted">
                                     @if (!string.IsNullOrWhiteSpace(c.CommonName)) { <div>俗名：@c.CommonName</div> }
@@ -66,6 +72,14 @@
                 <a asp-action="Create" class="btn btn-outline-secondary">返回修改</a>
             </form>
         }
+        else
+        {
+            <div class="empty-state mb-4">
+                <div class="empty-state-icon">🔍</div>
+                <h2 class="h5">找不到候選物種</h2>
+                <p class="text-muted mb-0">可改手填學名再查，或先建檔、知識之後補。</p>
+            </div>
+        }
 
         <section class="panel mb-3">
             <div class="panel-header"><strong>手填學名再查</strong></div>
@@ -77,13 +91,13 @@
                         <input asp-for="ManualScientificName" class="form-control" placeholder="例如：Stephania erecta" />
                     </div>
                     <div class="col-md-4">
-                        <button type="submit" class="btn btn-outline-primary w-100">查學名</button>
+                        <button type="submit" class="btn btn-outline-emphasis w-100">查學名</button>
                     </div>
                 </form>
             </div>
         </section>
 
-        <section class="panel">
+        <section class="panel panel-quiet">
             <div class="panel-header"><strong>先建檔、知識之後補</strong></div>
             <div class="panel-body">
                 <p class="text-muted small mb-3">斷網或對不到物種時可用。會以「未確認」物種建檔，提醒週期預設 7 天。</p>

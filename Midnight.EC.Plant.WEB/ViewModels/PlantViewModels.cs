@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using Midnight.EC.Plant.WEB.Models.Enums;
 
 namespace Midnight.EC.Plant.WEB.ViewModels;
@@ -15,7 +15,7 @@ public class PlantListViewModel
 
 public class PlantDashboardCardViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? NickName { get; set; }
     public string DisplayName { get; set; } = string.Empty;
@@ -40,7 +40,7 @@ public class PlantDashboardCardViewModel
 
 public class PlantListItemViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? SpeciesName { get; set; }
     public string? Location { get; set; }
@@ -59,7 +59,7 @@ public class CreatePlantViewModel
     [Display(Name = "今天已澆水")]
     public bool WateredToday { get; set; } = true;
 
-    [Display(Name = "位置備註")]
+    [Display(Name = "位置備註（選填）")]
     public string? Location { get; set; }
 
     [Display(Name = "備註")]
@@ -68,6 +68,30 @@ public class CreatePlantViewModel
     [Display(Name = "幼苗時間")]
     [DataType(DataType.Date)]
     public DateTime? StartDate { get; set; }
+
+    [Required(ErrorMessage = "請選擇實際位置類型")]
+    [Display(Name = "實際位置類型")]
+    public PlacementType? ActualPlacement { get; set; }
+
+    [Required(ErrorMessage = "請選擇實際日照")]
+    [Display(Name = "實際日照")]
+    public LightLevel? ActualLight { get; set; }
+
+    [Required(ErrorMessage = "請選擇是否有遮雨")]
+    [Display(Name = "是否有遮雨")]
+    public bool? HasRainCover { get; set; }
+
+    [Required(ErrorMessage = "請填寫介質類型")]
+    [Display(Name = "介質類型")]
+    public string? SubstrateType { get; set; }
+
+    [Required(ErrorMessage = "請選擇水盤狀態")]
+    [Display(Name = "水盤狀態")]
+    public SaucerState? SaucerState { get; set; }
+
+    [Required(ErrorMessage = "請選擇所在縣市")]
+    [Display(Name = "所在縣市")]
+    public string? City { get; set; }
 }
 
 public class ConfirmSpeciesViewModel
@@ -78,6 +102,11 @@ public class ConfirmSpeciesViewModel
 
     [Display(Name = "手填學名再查")]
     public string? ManualScientificName { get; set; }
+
+    public List<string> MismatchWarnings { get; set; } = [];
+
+    [Display(Name = "我知道環境不理想")]
+    public bool AcknowledgeMismatch { get; set; }
 }
 
 public class SpeciesCandidateItemViewModel
@@ -96,7 +125,7 @@ public class SpeciesCandidateItemViewModel
 
 public class EditPlantViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
 
     [Required(ErrorMessage = "請輸入植物名稱")]
     [Display(Name = "我的植物名稱")]
@@ -121,7 +150,7 @@ public class EditPlantViewModel
 
 public class PlantDetailViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? NickName { get; set; }
     public string? Location { get; set; }
@@ -136,13 +165,12 @@ public class PlantDetailViewModel
     public PlantKnowledgeViewModel? Knowledge { get; set; }
     public List<PlantPhotoItemViewModel> Photos { get; set; } = [];
     public List<PlantAnalysisItemViewModel> Analyses { get; set; } = [];
-    public List<PlantCareRecordItemViewModel> CareRecords { get; set; } = [];
+    public List<PlantTimelineItemViewModel> Timeline { get; set; } = [];
     public PlantTrendViewModel Trend { get; set; } = new();
     public int? DaysSinceLastWatering { get; set; }
-    public CreateCareRecordViewModel NewCareRecord { get; set; } = new();
     public CreatePhotoViewModel NewPhoto { get; set; } = new();
-    public TodayLogViewModel TodayLog { get; set; } = new();
-    public TodayLogViewModel BackfillLog { get; set; } = new();
+    /// <summary>記一筆（日期可今天或過去）</summary>
+    public TodayLogViewModel LogEntry { get; set; } = new();
     public PlantProfileViewModel Profile { get; set; } = new();
     public PlantCareSuggestionsViewModel CareSuggestions { get; set; } = new();
     public SyncKnowledgeViewModel SyncKnowledge { get; set; } = new();
@@ -151,7 +179,7 @@ public class PlantDetailViewModel
 
 public class PlantPhotoItemViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string PublicPath { get; set; } = string.Empty;
     public string? Note { get; set; }
     public bool IsCover { get; set; }
@@ -196,6 +224,7 @@ public class PlantCareSuggestionsViewModel
     public decimal? SuggestedTemperatureMax { get; set; }
     public string? AiWateringAdvice { get; set; }
     public string? AiGrowthTrend { get; set; }
+    public string? AiFertilizerAdvice { get; set; }
     public string? PersonalCareNotesHint { get; set; }
 }
 
@@ -207,7 +236,7 @@ public class SyncKnowledgeViewModel
 
 public class PlantDiaryItemViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public DateTime DiaryDate { get; set; }
     public string? Title { get; set; }
     public string? Note { get; set; }
@@ -216,7 +245,7 @@ public class PlantDiaryItemViewModel
 
 public class PlantImageItemViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string PublicPath { get; set; } = string.Empty;
     public string? OriginalFileName { get; set; }
 }
@@ -236,27 +265,28 @@ public class CreateDiaryViewModel
 
 public class PlantAnalysisItemViewModel
 {
-    public int Id { get; set; }
-    public int? ImageId { get; set; }
+    public Guid Id { get; set; }
+    public Guid? ImageId { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? Summary { get; set; }
     public int? HealthScore { get; set; }
     public decimal? Confidence { get; set; }
     public string? ResultJson { get; set; }
+    public string? FertilizerAdviceText { get; set; }
     public bool IsExpanded { get; set; }
 }
 
 public class AnalysisStatusViewModel
 {
-    public int JobId { get; set; }
+    public Guid JobId { get; set; }
     public AnalysisJobStatus Status { get; set; }
-    public int? AnalysisId { get; set; }
+    public Guid? AnalysisId { get; set; }
     public string? ErrorMessage { get; set; }
 }
 
 public class PlantCareRecordItemViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public DateTime RecordDate { get; set; }
     public CareRecordType CareType { get; set; }
     public decimal? NumericValue { get; set; }
@@ -289,13 +319,12 @@ public class TodayLogViewModel
     public bool Watered { get; set; }
     public bool Fertilized { get; set; }
 
-    [Display(Name = "一句話")]
+    [Display(Name = "備註")]
     public string? Note { get; set; }
 
-    /// <summary>僅補記用；日常極簡列為今天。</summary>
     [DataType(DataType.Date)]
-    [Display(Name = "補記日期")]
-    public DateTime? LogDate { get; set; }
+    [Display(Name = "日期")]
+    public DateTime? LogDate { get; set; } = DateTime.Today;
 }
 
 public class PlantTrendViewModel
@@ -345,6 +374,9 @@ public class PlantProfileViewModel
     [Display(Name = "介質類型")]
     public string? SubstrateType { get; set; }
 
+    [Display(Name = "水盤狀態")]
+    public SaucerState? SaucerState { get; set; }
+
     [Display(Name = "所在縣市")]
     public string? City { get; set; }
 
@@ -356,12 +388,15 @@ public class PlantProfileViewModel
     public List<string> CareTaboos { get; set; } = [];
     public string? SuggestedLightLabel => LightLevelDisplay.ToLabel(SuggestedLight);
     public bool EnvironmentIncomplete { get; set; }
+
+    /// <summary>針對此盆實際環境的 AI 適配建議</summary>
+    public string? AiEnvironmentAdvice { get; set; }
 }
 
 public class PlantReminderItemViewModel
 {
-    public int Id { get; set; }
-    public int PlantId { get; set; }
+    public Guid Id { get; set; }
+    public Guid PlantId { get; set; }
     public string? PlantName { get; set; }
     public ReminderType ReminderType { get; set; }
     public ReminderPriority Priority { get; set; }
@@ -383,13 +418,13 @@ public class PlantTimelineItemViewModel
 public class PlantCompareViewModel
 {
     public List<PlantCompareOptionViewModel> PlantOptions { get; set; } = [];
-    public int[] SelectedPlantIds { get; set; } = [];
+    public Guid[] SelectedPlantIds { get; set; } = [];
     public PlantComparisonResultViewModel? Result { get; set; }
 }
 
 public class PlantCompareOptionViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? SpeciesName { get; set; }
     public bool IsSelected { get; set; }
@@ -404,7 +439,7 @@ public class PlantComparisonResultViewModel
 
 public class PlantComparisonRowViewModel
 {
-    public int PlantId { get; set; }
+    public Guid PlantId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? SpeciesName { get; set; }
     public string? Location { get; set; }

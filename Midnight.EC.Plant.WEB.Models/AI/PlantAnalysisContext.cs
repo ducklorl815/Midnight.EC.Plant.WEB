@@ -15,7 +15,7 @@ public class PlantAnalysisContext
     public PlantProfileDto? Profile { get; set; }
     public PlantTrendDto? Trend { get; set; }
     public AnalysisScope Scope { get; set; } = AnalysisScope.Recent30Days;
-    public int? FocusImageId { get; set; }
+    public Guid? FocusImageId { get; set; }
     public string? FocusImageNote { get; set; }
     public string? FocusImageAbsolutePath { get; set; }
     public string? FocusImageContentType { get; set; }

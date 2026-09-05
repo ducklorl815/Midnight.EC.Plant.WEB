@@ -1,34 +1,37 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Midnight.EC.Plant.WEB.Models.DTOs;
-using Midnight.EC.Plant.WEB.Models.Entities;
+using Midnight.EC.Plant.WEB.Models.Models;
 using Midnight.EC.Plant.WEB.Models.Enums;
 using Midnight.EC.Plant.WEB.Models.Extensions;
 using Midnight.EC.Plant.WEB.Models.External;
-using Midnight.EC.Plant.WEB.Models.Repositories;
+using Midnight.EC.Plant.WEB.Models.Respository;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
+using Midnight.EC.Plant.WEB.Services.PlantKnowledge;
+using Midnight.EC.Plant.WEB.Services.PlantProfile;
+using Midnight.EC.Plant.WEB.Services.PlantCare;
 
 namespace Midnight.EC.Plant.WEB.Services.Plant;
 
-public class PlantService : IPlantService
+public class PlantService
 {
     public const int DefaultWateringIntervalDays = 7;
     public const string PendingScientificName = "未確認";
 
-    private readonly IPlantRepository _plantRepository;
-    private readonly IPlantSpeciesRepository _speciesRepository;
+    private readonly PlantRespo _plantRepository;
+    private readonly PlantSpeciesRespo _speciesRepository;
     private readonly IExternalPlantApiService _externalPlantApiService;
-    private readonly IPlantKnowledgeService _plantKnowledgeService;
-    private readonly IPlantProfileService _plantProfileService;
-    private readonly IPlantCareService _plantCareService;
+    private readonly PlantKnowledgeService _plantKnowledgeService;
+    private readonly PlantProfileService _plantProfileService;
+    private readonly PlantCareService _plantCareService;
     private readonly ILogger<PlantService> _logger;
 
     public PlantService(
-        IPlantRepository plantRepository,
-        IPlantSpeciesRepository speciesRepository,
+        PlantRespo plantRepository,
+        PlantSpeciesRespo speciesRepository,
         IExternalPlantApiService externalPlantApiService,
-        IPlantKnowledgeService plantKnowledgeService,
-        IPlantProfileService plantProfileService,
-        IPlantCareService plantCareService,
+        PlantKnowledgeService plantKnowledgeService,
+        PlantProfileService plantProfileService,
+        PlantCareService plantCareService,
         ILogger<PlantService> logger)
     {
         _plantRepository = plantRepository;
@@ -43,10 +46,10 @@ public class PlantService : IPlantService
     public Task<List<PlantDto>> GetAllAsync(CancellationToken cancellationToken = default) =>
         GetAllInternalAsync(cancellationToken);
 
-    public Task<PlantDto?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
+    public Task<PlantDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         GetByIdInternalAsync(id, cancellationToken);
 
-    public Task<bool> IsNickNameTakenAsync(string nickName, int? excludePlantId = null, CancellationToken cancellationToken = default) =>
+    public Task<bool> IsNickNameTakenAsync(string nickName, Guid? excludePlantId = null, CancellationToken cancellationToken = default) =>
         _plantRepository.IsNickNameTakenAsync(nickName, excludePlantId, cancellationToken);
 
     public Task<IReadOnlyList<ExternalSpeciesResult>> SearchSpeciesCandidatesAsync(
@@ -102,6 +105,29 @@ public class PlantService : IPlantService
             cancellationToken);
     }
 
+    public async Task<Guid> EnsureSpeciesKnowledgeAsync(
+        ExternalSpeciesResult confirmedSpecies,
+        string chineseName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(confirmedSpecies.ScientificName))
+        {
+            throw new InvalidOperationException("物種學名不可空白。");
+        }
+
+        var species = await ResolveOrCreateSpeciesAsync(confirmedSpecies, chineseName.Trim(), cancellationToken);
+        try
+        {
+            await _plantKnowledgeService.SyncFromExternalAsync(species.ID, chineseName.Trim(), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Knowledge sync failed for species {SpeciesId} during ensure", species.ID);
+        }
+
+        return species.ID;
+    }
+
     public async Task<PlantDto> CreateFromDraftAsync(
         CreatePlantDraft draft,
         ExternalSpeciesResult? confirmedSpecies,
@@ -124,17 +150,17 @@ public class PlantService : IPlantService
             throw new InvalidOperationException($"暱稱「{nickName}」已被使用，請換一個。");
         }
 
-        PlantSpecies species;
+        PlantSpeciesModel species;
         if (confirmedSpecies != null && !string.IsNullOrWhiteSpace(confirmedSpecies.ScientificName))
         {
             species = await ResolveOrCreateSpeciesAsync(confirmedSpecies, chineseName, cancellationToken);
             try
             {
-                await _plantKnowledgeService.SyncFromExternalAsync(species.Id, chineseName, cancellationToken);
+                await _plantKnowledgeService.SyncFromExternalAsync(species.ID, chineseName, cancellationToken);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Knowledge sync failed for species {SpeciesId}; plant will still be created", species.Id);
+                _logger.LogWarning(ex, "Knowledge sync failed for species {SpeciesId}; plant will still be created", species.ID);
             }
         }
         else
@@ -143,10 +169,10 @@ public class PlantService : IPlantService
         }
 
         var utcNow = DateTime.UtcNow;
-        var plant = new Midnight.EC.Plant.WEB.Models.Entities.Plant
+        var plant = new Midnight.EC.Plant.WEB.Models.Models.PlantModel
         {
             Name = chineseName,
-            SpeciesId = species.Id,
+            SpeciesID = species.ID,
             NickName = nickName,
             Description = draft.Description,
             Location = draft.Location,
@@ -156,19 +182,23 @@ public class PlantService : IPlantService
             UpdatedAt = utcNow
         };
 
-        await _plantRepository.AddAsync(plant, cancellationToken);
-        await _plantRepository.SaveChangesAsync(cancellationToken);
-
-        await _plantProfileService.SaveAsync(plant.Id, new PlantProfileDto
-        {
-            PlantId = plant.Id,
-            WateringIntervalDays = DefaultWateringIntervalDays
+        await _plantRepository.InsertAsync(plant, cancellationToken);
+        await _plantProfileService.SaveAsync(plant.ID, new PlantProfileDto {
+            PlantId = plant.ID,
+            WateringIntervalDays = DefaultWateringIntervalDays,
+            ActualPlacement = draft.ActualPlacement,
+            ActualLight = draft.ActualLight,
+            HasRainCover = draft.HasRainCover,
+            SubstrateType = draft.SubstrateType,
+            SaucerState = draft.SaucerState,
+            City = draft.City,
+            EnvironmentMismatchAcknowledged = draft.EnvironmentMismatchAcknowledged
         }, cancellationToken);
 
         if (draft.WateredToday)
         {
             await _plantCareService.CreateAsync(
-                plant.Id,
+                plant.ID,
                 DateTime.Today,
                 CareRecordType.Watering,
                 null,
@@ -177,16 +207,16 @@ public class PlantService : IPlantService
                 cancellationToken);
         }
 
-        var created = await _plantRepository.GetByIdWithDetailsAsync(plant.Id, cancellationToken)
+        var created = await _plantRepository.GetByIdWithDetailsAsync(plant.ID, cancellationToken)
             ?? throw new InvalidOperationException("建立植物後無法讀取資料。");
 
         _logger.LogInformation("Created plant {PlantId} species {SpeciesId} pending={Pending}",
-            created.Id, created.SpeciesId, species.SourceType == "Pending");
+            created.ID, created.SpeciesID, species.SourceType == "Pending");
         return created.ToDto();
     }
 
     public async Task<PlantDto> UpdateAsync(
-        int id,
+        Guid id,
         string name,
         string? nickName,
         string? location,
@@ -208,31 +238,28 @@ public class PlantService : IPlantService
         plant.Location = location;
         plant.Description = description;
         plant.StartDate = startDate?.ToUniversalTime() ?? plant.StartDate;
-        plant.UpdatedAt = DateTime.UtcNow;
+        plant.ModifyDate = DateTime.UtcNow;
 
         await _plantRepository.UpdateAsync(plant, cancellationToken);
-        await _plantRepository.SaveChangesAsync(cancellationToken);
-
         var updated = await _plantRepository.GetByIdWithDetailsAsync(id, cancellationToken)
             ?? throw new InvalidOperationException("更新植物後無法讀取資料。");
 
         return updated.ToDto();
     }
 
-    public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var plant = await _plantRepository.GetByIdAsync(id, cancellationToken)
             ?? throw new InvalidOperationException("找不到植物。");
 
         // Spec: archive only (IsActive = false)
-        plant.IsActive = false;
-        plant.UpdatedAt = DateTime.UtcNow;
+        plant.Enabled = false;
+        plant.ModifyDate = DateTime.UtcNow;
 
         await _plantRepository.UpdateAsync(plant, cancellationToken);
-        await _plantRepository.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task<PlantSpecies> ResolveOrCreateSpeciesAsync(
+    private async Task<PlantSpeciesModel> ResolveOrCreateSpeciesAsync(
         ExternalSpeciesResult external,
         string chineseName,
         CancellationToken cancellationToken)
@@ -243,16 +270,15 @@ public class PlantService : IPlantService
             if (string.IsNullOrWhiteSpace(existing.ChineseName) && !string.IsNullOrWhiteSpace(chineseName))
             {
                 existing.ChineseName = chineseName;
-                existing.UpdatedAt = DateTime.UtcNow;
+                existing.ModifyDate = DateTime.UtcNow;
                 await _speciesRepository.UpdateAsync(existing, cancellationToken);
-                await _speciesRepository.SaveChangesAsync(cancellationToken);
             }
 
             return existing;
         }
 
         var now = DateTime.UtcNow;
-        var species = new PlantSpecies
+        var species = new PlantSpeciesModel
         {
             ScientificName = external.ScientificName.Trim(),
             CommonName = external.CommonName,
@@ -267,12 +293,11 @@ public class PlantService : IPlantService
             UpdatedAt = now
         };
 
-        await _speciesRepository.AddAsync(species, cancellationToken);
-        await _speciesRepository.SaveChangesAsync(cancellationToken);
+        await _speciesRepository.InsertAsync(species, cancellationToken);
         return species;
     }
 
-    private async Task<PlantSpecies> GetOrCreatePendingSpeciesAsync(string chineseName, CancellationToken cancellationToken)
+    private async Task<PlantSpeciesModel> GetOrCreatePendingSpeciesAsync(string chineseName, CancellationToken cancellationToken)
     {
         var existing = await _speciesRepository.SearchByNameAsync(chineseName, cancellationToken);
         if (existing != null &&
@@ -284,7 +309,7 @@ public class PlantService : IPlantService
 
         // Prefer a dedicated pending row per Chinese name when scientific is unknown
         var now = DateTime.UtcNow;
-        var species = new PlantSpecies
+        var species = new PlantSpeciesModel
         {
             ScientificName = PendingScientificName,
             ChineseName = chineseName,
@@ -295,8 +320,7 @@ public class PlantService : IPlantService
             UpdatedAt = now
         };
 
-        await _speciesRepository.AddAsync(species, cancellationToken);
-        await _speciesRepository.SaveChangesAsync(cancellationToken);
+        await _speciesRepository.InsertAsync(species, cancellationToken);
         return species;
     }
 
@@ -306,7 +330,7 @@ public class PlantService : IPlantService
         return plants.Select(p => p.ToDto()).ToList();
     }
 
-    private async Task<PlantDto?> GetByIdInternalAsync(int id, CancellationToken cancellationToken)
+    private async Task<PlantDto?> GetByIdInternalAsync(Guid id, CancellationToken cancellationToken)
     {
         var plant = await _plantRepository.GetByIdWithDetailsAsync(id, cancellationToken);
         return plant?.ToDto();

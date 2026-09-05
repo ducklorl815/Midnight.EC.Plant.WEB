@@ -1,32 +1,31 @@
-using Midnight.EC.Plant.WEB.Models.AI;
 using Midnight.EC.Plant.WEB.Models.DTOs;
-using Midnight.EC.Plant.WEB.Models.Entities;
+using Midnight.EC.Plant.WEB.Models.Models;
 
 namespace Midnight.EC.Plant.WEB.Models.Extensions;
 
 public static class EntityMappingExtensions
 {
-    public static PlantDto ToDto(this Entities.Plant entity) => new()
+    public static PlantDto ToDto(this PlantModel entity) => new()
     {
-        Id = entity.Id,
+        Id = entity.ID,
         Name = entity.Name,
-        SpeciesId = entity.SpeciesId,
+        SpeciesId = entity.SpeciesID,
         NickName = entity.NickName,
         Description = entity.Description,
         Location = entity.Location,
         EnvironmentNote = entity.EnvironmentNote,
         PurchaseDate = entity.PurchaseDate,
         StartDate = entity.StartDate,
-        IsActive = entity.IsActive,
-        CreatedAt = entity.CreatedAt,
-        UpdatedAt = entity.UpdatedAt,
+        Enabled = entity.Enabled,
+        CreateDate = entity.CreateDate,
+        ModifyDate = entity.ModifyDate,
         Species = entity.Species?.ToDto(),
         Knowledge = entity.Species?.Knowledge?.ToDto()
     };
 
-    public static PlantSpeciesDto ToDto(this PlantSpecies entity) => new()
+    public static PlantSpeciesDto ToDto(this PlantSpeciesModel entity) => new()
     {
-        Id = entity.Id,
+        Id = entity.ID,
         ScientificName = entity.ScientificName,
         CommonName = entity.CommonName,
         ChineseName = entity.ChineseName,
@@ -36,10 +35,10 @@ public static class EntityMappingExtensions
         ImageUrl = entity.ImageUrl
     };
 
-    public static PlantKnowledgeDto ToDto(this PlantKnowledge entity) => new()
+    public static PlantKnowledgeDto ToDto(this PlantKnowledgeModel entity) => new()
     {
-        Id = entity.Id,
-        SpeciesId = entity.SpeciesId,
+        Id = entity.ID,
+        SpeciesId = entity.SpeciesID,
         LightRequirement = entity.LightRequirement,
         WaterRequirement = entity.WaterRequirement,
         HumidityRequirement = entity.HumidityRequirement,
@@ -59,10 +58,10 @@ public static class EntityMappingExtensions
         DataVersion = entity.DataVersion
     };
 
-    public static PlantDiaryDto ToDto(this PlantDiary entity) => new()
+    public static PlantDiaryDto ToDto(this PlantDiaryModel entity, IEnumerable<PlantImageModel>? images = null) => new()
     {
-        Id = entity.Id,
-        PlantId = entity.PlantId,
+        Id = entity.ID,
+        PlantId = entity.PlantID,
         DiaryDate = entity.DiaryDate,
         Title = entity.Title,
         Note = entity.Note,
@@ -70,15 +69,15 @@ public static class EntityMappingExtensions
         EnvironmentNote = entity.EnvironmentNote,
         WateringNote = entity.WateringNote,
         FertilizerNote = entity.FertilizerNote,
-        CreatedAt = entity.CreatedAt,
-        Images = entity.Images.Select(i => i.ToDto()).ToList()
+        CreateDate = entity.CreateDate,
+        Images = images?.Select(i => i.ToDto()).ToList() ?? []
     };
 
-    public static PlantImageDto ToDto(this PlantImage entity) => new()
+    public static PlantImageDto ToDto(this PlantImageModel entity) => new()
     {
-        Id = entity.Id,
-        PlantId = entity.PlantId,
-        DiaryId = entity.DiaryId,
+        Id = entity.ID,
+        PlantId = entity.PlantID,
+        DiaryId = entity.DiaryID,
         Note = entity.Note,
         IsCover = entity.IsCover,
         FileName = entity.FileName,
@@ -89,15 +88,15 @@ public static class EntityMappingExtensions
         Width = entity.Width,
         Height = entity.Height,
         FileSize = entity.FileSize,
-        CreatedAt = entity.CreatedAt
+        CreateDate = entity.CreateDate
     };
 
-    public static PlantAnalysisDto ToDto(this PlantAnalysis entity) => new()
+    public static PlantAnalysisDto ToDto(this PlantAnalysisModel entity) => new()
     {
-        Id = entity.Id,
-        PlantId = entity.PlantId,
-        DiaryId = entity.DiaryId,
-        ImageId = entity.ImageId,
+        Id = entity.ID,
+        PlantId = entity.PlantID,
+        DiaryId = entity.DiaryID,
+        ImageId = entity.ImageID,
         AnalysisType = entity.AnalysisType,
         AnalysisScope = entity.AnalysisScope,
         ModelName = entity.ModelName,
@@ -106,27 +105,27 @@ public static class EntityMappingExtensions
         HealthScore = entity.HealthScore,
         Confidence = entity.Confidence,
         ResultJson = entity.ResultJson,
-        CreatedAt = entity.CreatedAt
+        CreateDate = entity.CreateDate
     };
 
-    public static PlantAnalysisJobDto ToDto(this PlantAnalysisJob entity) => new()
+    public static PlantAnalysisJobDto ToDto(this PlantAnalysisJobModel entity) => new()
     {
-        Id = entity.Id,
-        PlantId = entity.PlantId,
-        DiaryId = entity.DiaryId,
-        ImageId = entity.ImageId,
-        AnalysisId = entity.AnalysisId,
+        Id = entity.ID,
+        PlantId = entity.PlantID,
+        DiaryId = entity.DiaryID,
+        ImageId = entity.ImageID,
+        AnalysisId = entity.AnalysisID,
         Status = entity.Status,
         AnalysisScope = entity.AnalysisScope,
         ErrorMessage = entity.ErrorMessage,
-        CreatedAt = entity.CreatedAt,
+        CreateDate = entity.CreateDate,
         CompletedAt = entity.CompletedAt
     };
 
-    public static PlantSourceContentDto ToDto(this PlantSourceContent entity, PlantSource? source = null) => new()
+    public static PlantSourceContentDto ToDto(this PlantSourceContentModel entity, PlantSourceModel? source = null) => new()
     {
-        Id = entity.Id,
-        SourceId = entity.SourceId,
+        Id = entity.ID,
+        SourceId = entity.SourceID,
         SourceTitle = source?.Title,
         SourceUrl = source?.Url,
         ReliabilityLevel = source?.ReliabilityLevel ?? 3,
@@ -135,22 +134,22 @@ public static class EntityMappingExtensions
         Keywords = entity.Keywords
     };
 
-    public static PlantCareRecordDto ToDto(this PlantCareRecord entity) => new()
+    public static PlantCareRecordDto ToDto(this PlantCareRecordModel entity) => new()
     {
-        Id = entity.Id,
-        PlantId = entity.PlantId,
+        Id = entity.ID,
+        PlantId = entity.PlantID,
         RecordDate = entity.RecordDate,
         CareType = entity.CareType,
         NumericValue = entity.NumericValue,
         Unit = entity.Unit,
         Note = entity.Note,
-        CreatedAt = entity.CreatedAt
+        CreateDate = entity.CreateDate
     };
 
-    public static PlantProfileDto ToDto(this PlantProfile entity) => new()
+    public static PlantProfileDto ToDto(this PlantProfileModel entity) => new()
     {
-        Id = entity.Id,
-        PlantId = entity.PlantId,
+        Id = entity.ID,
+        PlantId = entity.PlantID,
         WateringIntervalDays = entity.WateringIntervalDays,
         FertilizingIntervalDays = entity.FertilizingIntervalDays,
         TargetHumidityMin = entity.TargetHumidityMin,
@@ -162,21 +161,23 @@ public static class EntityMappingExtensions
         ActualLight = entity.ActualLight,
         HasRainCover = entity.HasRainCover,
         SubstrateType = entity.SubstrateType,
+        SaucerState = entity.SaucerState,
         City = entity.City,
         OverrideSuggestedLight = entity.OverrideSuggestedLight,
         OverrideCareTaboosJson = entity.OverrideCareTaboosJson,
         WateringIntervalDetachedFromWiki = entity.WateringIntervalDetachedFromWiki,
-        EnvironmentMismatchAcknowledged = entity.EnvironmentMismatchAcknowledged
+        EnvironmentMismatchAcknowledged = entity.EnvironmentMismatchAcknowledged,
+        AiEnvironmentAdvice = entity.AiEnvironmentAdvice
     };
 
-    public static PlantReminderDto ToDto(this PlantReminder entity, string? plantName = null)
+    public static PlantReminderDto ToDto(this PlantReminderModel entity, string? plantName = null)
     {
         var today = DateTime.UtcNow.Date;
         return new PlantReminderDto
         {
-            Id = entity.Id,
-            PlantId = entity.PlantId,
-            PlantName = plantName ?? entity.Plant?.Name,
+            Id = entity.ID,
+            PlantId = entity.PlantID,
+            PlantName = plantName,
             ReminderType = entity.ReminderType,
             Priority = entity.Priority,
             Status = entity.Status,

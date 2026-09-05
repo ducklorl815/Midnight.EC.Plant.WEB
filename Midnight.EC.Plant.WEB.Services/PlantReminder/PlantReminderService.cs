@@ -1,38 +1,38 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Midnight.EC.Plant.WEB.Models.AI;
 using Midnight.EC.Plant.WEB.Models.DTOs;
-using Midnight.EC.Plant.WEB.Models.Entities;
+using Midnight.EC.Plant.WEB.Models.Models;
 using Midnight.EC.Plant.WEB.Models.Enums;
 using Midnight.EC.Plant.WEB.Models.Extensions;
-using Midnight.EC.Plant.WEB.Models.Repositories;
+using Midnight.EC.Plant.WEB.Models.Respository;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Utility.Json;
 
 namespace Midnight.EC.Plant.WEB.Services.PlantReminder;
 
-public class PlantReminderService : IPlantReminderService
+public class PlantReminderService
 {
     private const int DefaultWateringIntervalDays = 7;
     private const int DefaultFertilizingIntervalDays = 30;
     private const int AnalysisSuggestIntervalDays = 14;
 
-    private readonly IPlantReminderRepository _reminderRepository;
-    private readonly IPlantRepository _plantRepository;
-    private readonly IPlantProfileRepository _profileRepository;
-    private readonly IPlantCareRecordRepository _careRepository;
-    private readonly IPlantAnalysisRepository _analysisRepository;
-    private readonly IPlantImageRepository _imageRepository;
+    private readonly PlantReminderRespo _reminderRepository;
+    private readonly PlantRespo _plantRepository;
+    private readonly PlantProfileRespo _profileRepository;
+    private readonly PlantCareRecordRespo _careRepository;
+    private readonly PlantAnalysisRespo _analysisRepository;
+    private readonly PlantImageRespo _imageRepository;
     private readonly IImageStorageService _imageStorageService;
     private readonly ILogger<PlantReminderService> _logger;
 
     public PlantReminderService(
-        IPlantReminderRepository reminderRepository,
-        IPlantRepository plantRepository,
-        IPlantProfileRepository profileRepository,
-        IPlantCareRecordRepository careRepository,
-        IPlantAnalysisRepository analysisRepository,
-        IPlantImageRepository imageRepository,
+        PlantReminderRespo reminderRepository,
+        PlantRespo plantRepository,
+        PlantProfileRespo profileRepository,
+        PlantCareRecordRespo careRepository,
+        PlantAnalysisRespo analysisRepository,
+        PlantImageRespo imageRepository,
         IImageStorageService imageStorageService,
         ILogger<PlantReminderService> logger)
     {
@@ -46,7 +46,7 @@ public class PlantReminderService : IPlantReminderService
         _logger = logger;
     }
 
-    public async Task<List<PlantReminderDto>> GetActiveByPlantIdAsync(int plantId, CancellationToken cancellationToken = default)
+    public async Task<List<PlantReminderDto>> GetActiveByPlantIdAsync(Guid plantId, CancellationToken cancellationToken = default)
     {
         var reminders = await _reminderRepository.GetActiveByPlantIdAsync(plantId, cancellationToken);
         return reminders.Select(r => r.ToDto()).ToList();
@@ -73,15 +73,15 @@ public class PlantReminderService : IPlantReminderService
         var items = new List<PlantDashboardItemDto>();
         foreach (var plant in plants)
         {
-            var plantReminders = reminders.Where(r => r.PlantId == plant.Id).ToList();
-            lastWateringDates.TryGetValue(plant.Id, out var lastWateringDate);
-            var hasWatering = lastWateringDates.ContainsKey(plant.Id);
+            var plantReminders = reminders.Where(r => r.PlantID == plant.ID).ToList();
+            lastWateringDates.TryGetValue(plant.ID, out var lastWateringDate);
+            var hasWatering = lastWateringDates.ContainsKey(plant.ID);
             int? daysSinceWatering = hasWatering
                 ? (today - lastWateringDate.Date).Days
                 : null;
             var chineseName = plant.Species?.ChineseName;
             var scientificName = plant.Species?.ScientificName;
-            var profile = await _profileRepository.GetByPlantIdAsync(plant.Id, cancellationToken);
+            var profile = await _profileRepository.GetByPlantIdAsync(plant.ID, cancellationToken);
             var interval = profile?.WateringIntervalDays
                 ?? InferWateringIntervalDays(plant.Species?.Knowledge?.WaterRequirement);
             var isOverdue = hasWatering && daysSinceWatering.HasValue && daysSinceWatering.Value >= interval;
@@ -97,11 +97,12 @@ public class PlantReminderService : IPlantReminderService
                 || profile.ActualLight == null
                 || profile.HasRainCover == null
                 || string.IsNullOrWhiteSpace(profile.SubstrateType)
+                || profile.SaucerState == null
                 || string.IsNullOrWhiteSpace(profile.City);
 
             items.Add(new PlantDashboardItemDto
             {
-                Id = plant.Id,
+                Id = plant.ID,
                 Name = plant.Name,
                 NickName = plant.NickName,
                 DisplayName = !string.IsNullOrWhiteSpace(plant.NickName) ? plant.NickName! : plant.Name,
@@ -109,9 +110,9 @@ public class PlantReminderService : IPlantReminderService
                 SpeciesChineseName = chineseName,
                 SpeciesScientificName = scientificName,
                 Location = plant.Location,
-                CoverImagePath = covers.GetValueOrDefault(plant.Id),
-                LatestVisualActivityAt = latestVisual.TryGetValue(plant.Id, out var visualAt) ? visualAt : null,
-                LatestHealthScore = analyses.GetValueOrDefault(plant.Id)?.HealthScore,
+                CoverImagePath = covers.GetValueOrDefault(plant.ID),
+                LatestVisualActivityAt = latestVisual.TryGetValue(plant.ID, out var visualAt) ? visualAt : null,
+                LatestHealthScore = analyses.GetValueOrDefault(plant.ID)?.HealthScore,
                 ActiveReminderCount = plantReminders.Count,
                 OverdueReminderCount = plantReminders.Count(r => r.DueDate.Date < today),
                 TopReminders = plantReminders.Take(3).Select(r => r.ToDto(plant.Name)).ToList(),
@@ -131,7 +132,7 @@ public class PlantReminderService : IPlantReminderService
         return items;
     }
 
-    public async Task SyncRemindersAsync(int? plantId, CancellationToken cancellationToken = default)
+    public async Task SyncRemindersAsync(Guid? plantId, CancellationToken cancellationToken = default)
     {
         var plants = plantId.HasValue
             ? await LoadSinglePlantAsync(plantId.Value, cancellationToken)
@@ -139,14 +140,14 @@ public class PlantReminderService : IPlantReminderService
 
         foreach (var plant in plants)
         {
-            var profile = await _profileRepository.GetByPlantIdAsync(plant.Id, cancellationToken);
-            var careRecords = await _careRepository.GetByPlantIdAsync(plant.Id, cancellationToken);
-            var analyses = await _analysisRepository.GetByPlantIdAsync(plant.Id, cancellationToken);
+            var profile = await _profileRepository.GetByPlantIdAsync(plant.ID, cancellationToken);
+            var careRecords = await _careRepository.GetByPlantIdAsync(plant.ID, cancellationToken);
+            var analyses = await _analysisRepository.GetByPlantIdAsync(plant.ID, cancellationToken);
 
             await UpsertCareReminderAsync(
                 plant,
                 ReminderType.Watering,
-                $"watering-{plant.Id}",
+                $"watering-{plant.ID}",
                 careRecords.Where(r => r.CareType == CareRecordType.Watering).OrderByDescending(r => r.RecordDate).FirstOrDefault()?.RecordDate,
                 profile?.WateringIntervalDays ?? InferWateringIntervalDays(plant.Species?.Knowledge?.WaterRequirement),
                 "澆水提醒",
@@ -161,7 +162,7 @@ public class PlantReminderService : IPlantReminderService
             await UpsertCareReminderAsync(
                 plant,
                 ReminderType.Fertilizing,
-                $"fertilizing-{plant.Id}",
+                $"fertilizing-{plant.ID}",
                 careRecords.Where(r => r.CareType == CareRecordType.Fertilizing).OrderByDescending(r => r.RecordDate).FirstOrDefault()?.RecordDate,
                 profile?.FertilizingIntervalDays ?? DefaultFertilizingIntervalDays,
                 "施肥提醒",
@@ -171,31 +172,28 @@ public class PlantReminderService : IPlantReminderService
             await UpsertAnalysisReminderAsync(plant, analyses, cancellationToken);
             await SyncAiAlertRemindersAsync(plant, analyses, cancellationToken);
         }
-
-        await _reminderRepository.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Synced reminders for {Count} plant(s)", plants.Count);
     }
 
-    public async Task DismissAsync(int reminderId, CancellationToken cancellationToken = default)
+    public async Task DismissAsync(Guid reminderId, CancellationToken cancellationToken = default)
     {
         var reminder = await _reminderRepository.GetByIdAsync(reminderId, cancellationToken)
             ?? throw new InvalidOperationException("找不到提醒。");
 
         reminder.Status = ReminderStatus.Dismissed;
         reminder.DismissedAt = DateTime.UtcNow;
-        reminder.UpdatedAt = DateTime.UtcNow;
+        reminder.ModifyDate = DateTime.UtcNow;
         await _reminderRepository.UpdateAsync(reminder, cancellationToken);
-        await _reminderRepository.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task<List<Midnight.EC.Plant.WEB.Models.Entities.Plant>> LoadSinglePlantAsync(int plantId, CancellationToken cancellationToken)
+    private async Task<List<Midnight.EC.Plant.WEB.Models.Models.PlantModel>> LoadSinglePlantAsync(Guid plantId, CancellationToken cancellationToken)
     {
         var plant = await _plantRepository.GetByIdWithDetailsAsync(plantId, cancellationToken);
         return plant == null ? [] : [plant];
     }
 
     private async Task UpsertCareReminderAsync(
-        Midnight.EC.Plant.WEB.Models.Entities.Plant plant,
+        Midnight.EC.Plant.WEB.Models.Models.PlantModel plant,
         ReminderType type,
         string sourceKey,
         DateTime? lastRecordDate,
@@ -204,7 +202,7 @@ public class PlantReminderService : IPlantReminderService
         string message,
         CancellationToken cancellationToken)
     {
-        var dueDate = (lastRecordDate ?? plant.CreatedAt).Date.AddDays(intervalDays);
+        var dueDate = (lastRecordDate ?? plant.CreateDate).Date.AddDays(intervalDays);
         var priority = dueDate.Date < DateTime.UtcNow.Date
             ? ReminderPriority.High
             : dueDate.Date == DateTime.UtcNow.Date
@@ -213,31 +211,31 @@ public class PlantReminderService : IPlantReminderService
 
         if (dueDate.Date > DateTime.UtcNow.Date.AddDays(2))
         {
-            await DeactivateReminderIfExistsAsync(plant.Id, sourceKey, cancellationToken);
+            await DeactivateReminderIfExistsAsync(plant.ID, sourceKey, cancellationToken);
             return;
         }
 
-        await UpsertReminderAsync(plant.Id, sourceKey, type, priority, title, message, dueDate, cancellationToken);
+        await UpsertReminderAsync(plant.ID, sourceKey, type, priority, title, message, dueDate, cancellationToken);
     }
 
     private async Task UpsertAnalysisReminderAsync(
-        Midnight.EC.Plant.WEB.Models.Entities.Plant plant,
-        List<Midnight.EC.Plant.WEB.Models.Entities.PlantAnalysis> analyses,
+        Midnight.EC.Plant.WEB.Models.Models.PlantModel plant,
+        List<Midnight.EC.Plant.WEB.Models.Models.PlantAnalysisModel> analyses,
         CancellationToken cancellationToken)
     {
-        var sourceKey = $"analysis-{plant.Id}";
-        var latest = analyses.OrderByDescending(a => a.CreatedAt).FirstOrDefault();
-        var dueDate = (latest?.CreatedAt ?? plant.CreatedAt).Date.AddDays(AnalysisSuggestIntervalDays);
+        var sourceKey = $"analysis-{plant.ID}";
+        var latest = analyses.OrderByDescending(a => a.CreateDate).FirstOrDefault();
+        var dueDate = (latest?.CreateDate ?? plant.CreateDate).Date.AddDays(AnalysisSuggestIntervalDays);
 
         if (dueDate.Date > DateTime.UtcNow.Date)
         {
-            await DeactivateReminderIfExistsAsync(plant.Id, sourceKey, cancellationToken);
+            await DeactivateReminderIfExistsAsync(plant.ID, sourceKey, cancellationToken);
             return;
         }
 
         var priority = dueDate.Date < DateTime.UtcNow.Date ? ReminderPriority.Normal : ReminderPriority.Low;
         await UpsertReminderAsync(
-            plant.Id,
+            plant.ID,
             sourceKey,
             ReminderType.Analysis,
             priority,
@@ -248,11 +246,11 @@ public class PlantReminderService : IPlantReminderService
     }
 
     private async Task SyncAiAlertRemindersAsync(
-        Midnight.EC.Plant.WEB.Models.Entities.Plant plant,
-        List<Midnight.EC.Plant.WEB.Models.Entities.PlantAnalysis> analyses,
+        Midnight.EC.Plant.WEB.Models.Models.PlantModel plant,
+        List<Midnight.EC.Plant.WEB.Models.Models.PlantAnalysisModel> analyses,
         CancellationToken cancellationToken)
     {
-        var latest = analyses.OrderByDescending(a => a.CreatedAt).FirstOrDefault();
+        var latest = analyses.OrderByDescending(a => a.CreateDate).FirstOrDefault();
         if (latest?.ResultJson == null)
         {
             return;
@@ -272,9 +270,9 @@ public class PlantReminderService : IPlantReminderService
                 continue;
             }
 
-            var sourceKey = $"ai-alert-{plant.Id}-{i}";
+            var sourceKey = $"ai-alert-{plant.ID}-{i}";
             await UpsertReminderAsync(
-                plant.Id,
+                plant.ID,
                 sourceKey,
                 ReminderType.AiAlert,
                 ReminderPriority.High,
@@ -286,7 +284,7 @@ public class PlantReminderService : IPlantReminderService
     }
 
     private async Task UpsertReminderAsync(
-        int plantId,
+        Guid plantId,
         string sourceKey,
         ReminderType type,
         ReminderPriority priority,
@@ -300,9 +298,9 @@ public class PlantReminderService : IPlantReminderService
 
         if (existing == null)
         {
-            await _reminderRepository.AddAsync(new Midnight.EC.Plant.WEB.Models.Entities.PlantReminder
+            await _reminderRepository.InsertAsync(new Midnight.EC.Plant.WEB.Models.Models.PlantReminderModel
             {
-                PlantId = plantId,
+                PlantID = plantId,
                 ReminderType = type,
                 Priority = priority,
                 Status = ReminderStatus.Active,
@@ -327,11 +325,11 @@ public class PlantReminderService : IPlantReminderService
         existing.Priority = priority;
         existing.ReminderType = type;
         existing.Status = ReminderStatus.Active;
-        existing.UpdatedAt = now;
+        existing.ModifyDate = now;
         await _reminderRepository.UpdateAsync(existing, cancellationToken);
     }
 
-    private async Task DeactivateReminderIfExistsAsync(int plantId, string sourceKey, CancellationToken cancellationToken)
+    private async Task DeactivateReminderIfExistsAsync(Guid plantId, string sourceKey, CancellationToken cancellationToken)
     {
         var existing = await _reminderRepository.GetBySourceKeyAsync(plantId, sourceKey, cancellationToken);
         if (existing == null || existing.Status != ReminderStatus.Active)
@@ -340,19 +338,19 @@ public class PlantReminderService : IPlantReminderService
         }
 
         existing.Status = ReminderStatus.Completed;
-        existing.UpdatedAt = DateTime.UtcNow;
+        existing.ModifyDate = DateTime.UtcNow;
         await _reminderRepository.UpdateAsync(existing, cancellationToken);
     }
 
-    private async Task<Dictionary<int, Midnight.EC.Plant.WEB.Models.Entities.PlantAnalysis>> LoadLatestAnalysesAsync(
-        IEnumerable<int> plantIds,
+    private async Task<Dictionary<Guid, Midnight.EC.Plant.WEB.Models.Models.PlantAnalysisModel>> LoadLatestAnalysesAsync(
+        IEnumerable<Guid> plantIds,
         CancellationToken cancellationToken)
     {
-        var result = new Dictionary<int, Midnight.EC.Plant.WEB.Models.Entities.PlantAnalysis>();
+        var result = new Dictionary<Guid, Midnight.EC.Plant.WEB.Models.Models.PlantAnalysisModel>();
         foreach (var id in plantIds)
         {
             var analyses = await _analysisRepository.GetByPlantIdAsync(id, cancellationToken);
-            var latest = analyses.OrderByDescending(a => a.CreatedAt).FirstOrDefault();
+            var latest = analyses.OrderByDescending(a => a.CreateDate).FirstOrDefault();
             if (latest != null)
             {
                 result[id] = latest;
@@ -362,9 +360,9 @@ public class PlantReminderService : IPlantReminderService
         return result;
     }
 
-    private async Task<Dictionary<int, string>> LoadCoverPathsAsync(IEnumerable<int> plantIds, CancellationToken cancellationToken)
+    private async Task<Dictionary<Guid, string>> LoadCoverPathsAsync(IEnumerable<Guid> plantIds, CancellationToken cancellationToken)
     {
-        var result = new Dictionary<int, string>();
+        var result = new Dictionary<Guid, string>();
         foreach (var id in plantIds)
         {
             var cover = await _imageRepository.GetCoverByPlantIdAsync(id, cancellationToken);
@@ -377,18 +375,18 @@ public class PlantReminderService : IPlantReminderService
         return result;
     }
 
-    private async Task<Dictionary<int, DateTime>> LoadLatestVisualActivityAsync(
-        IEnumerable<int> plantIds,
+    private async Task<Dictionary<Guid, DateTime>> LoadLatestVisualActivityAsync(
+        IEnumerable<Guid> plantIds,
         CancellationToken cancellationToken)
     {
-        var result = new Dictionary<int, DateTime>();
+        var result = new Dictionary<Guid, DateTime>();
         foreach (var id in plantIds)
         {
             var images = await _imageRepository.GetByPlantIdAsync(id, cancellationToken);
-            var latest = images.OrderByDescending(i => i.CreatedAt).FirstOrDefault();
+            var latest = images.OrderByDescending(i => i.CreateDate).FirstOrDefault();
             if (latest != null)
             {
-                result[id] = latest.CreatedAt;
+                result[id] = latest.CreateDate;
             }
         }
 

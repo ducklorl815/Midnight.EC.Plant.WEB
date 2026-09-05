@@ -2,7 +2,7 @@
 @using Midnight.EC.Plant.WEB.Models.Enums
 @{
     ViewData["Title"] = "補實際環境";
-    var plantId = (int)(ViewBag.PlantId ?? 0);
+    var plantId = ViewBag.PlantId is Guid g ? g : Guid.Empty;
     var displayName = ViewBag.DisplayName as string ?? "植栽";
 }
 
@@ -12,7 +12,7 @@
 
 <div class="page-header mb-4">
     <h1 class="page-title">補實際環境</h1>
-    <p class="page-subtitle">五項齊了才算完成。若與建議衝突，需勾選「我知道」才能存。</p>
+    <p class="page-subtitle">六項齊了才算完成。若與建議衝突，需勾選「我知道」才能存。</p>
 </div>
 
 @if (Model.SuggestedLight.HasValue || Model.CareTaboos.Any())
@@ -37,8 +37,11 @@
         <div class="row g-3">
             <div class="col-md-6">
                 <label asp-for="ActualPlacement" class="form-label"></label>
-                <select asp-for="ActualPlacement" class="form-select" asp-items="Html.GetEnumSelectList<PlacementType>()">
+                <select asp-for="ActualPlacement" class="form-select">
                     <option value="">— 請選擇 —</option>
+                    <option value="@((int)PlacementType.Indoor)">@PlacementTypeDisplay.ToLabel(PlacementType.Indoor)</option>
+                    <option value="@((int)PlacementType.Outdoor)">@PlacementTypeDisplay.ToLabel(PlacementType.Outdoor)</option>
+                    <option value="@((int)PlacementType.Balcony)">@PlacementTypeDisplay.ToLabel(PlacementType.Balcony)</option>
                 </select>
             </div>
             <div class="col-md-6">
@@ -50,6 +53,12 @@
                     <option value="@((int)LightLevel.HalfDay)">@LightLevelDisplay.ToLabel(LightLevel.HalfDay)</option>
                     <option value="@((int)LightLevel.FullSun)">@LightLevelDisplay.ToLabel(LightLevel.FullSun)</option>
                 </select>
+                <ul class="form-text small mb-0 mt-2 ps-3">
+                    <li><strong>@LightLevelDisplay.ToLabel(LightLevel.None)</strong>：@LightLevelDisplay.ToHelp(LightLevel.None)</li>
+                    <li><strong>@LightLevelDisplay.ToLabel(LightLevel.Diffuse)</strong>：@LightLevelDisplay.ToHelp(LightLevel.Diffuse)</li>
+                    <li><strong>@LightLevelDisplay.ToLabel(LightLevel.HalfDay)</strong>：@LightLevelDisplay.ToHelp(LightLevel.HalfDay)</li>
+                    <li><strong>@LightLevelDisplay.ToLabel(LightLevel.FullSun)</strong>：@LightLevelDisplay.ToHelp(LightLevel.FullSun)</li>
+                </ul>
             </div>
             <div class="col-md-6">
                 <label asp-for="HasRainCover" class="form-label"></label>
@@ -62,6 +71,16 @@
             <div class="col-md-6">
                 <label asp-for="SubstrateType" class="form-label"></label>
                 <input asp-for="SubstrateType" class="form-control" placeholder="例如：疏水顆粒土、泥炭混合" />
+            </div>
+            <div class="col-md-6">
+                <label asp-for="SaucerState" class="form-label"></label>
+                <select asp-for="SaucerState" class="form-select">
+                    <option value="">— 請選擇 —</option>
+                    <option value="@((int)SaucerState.None)">@SaucerStateDisplay.ToLabel(SaucerState.None)</option>
+                    <option value="@((int)SaucerState.PresentDry)">@SaucerStateDisplay.ToLabel(SaucerState.PresentDry)</option>
+                    <option value="@((int)SaucerState.PresentWithWater)">@SaucerStateDisplay.ToLabel(SaucerState.PresentWithWater)</option>
+                </select>
+                <div class="form-text">@SaucerStateDisplay.PurposeHint</div>
             </div>
             <div class="col-md-6">
                 <label asp-for="City" class="form-label"></label>
@@ -96,9 +115,9 @@
         <div class="mt-3 d-flex gap-2">
             <button type="submit" class="btn btn-plant-primary">儲存環境</button>
             <a asp-action="Details" asp-route-id="@plantId" class="btn btn-outline-secondary">取消</a>
-            <a asp-action="Details" asp-route-id="@plantId" class="btn btn-outline-emphasis">去單盆補知識／同步</a>
         </div>
     </div>
 </form>
 
-<p class="text-muted small mt-3">位置備註（客廳／窗台）請在「編輯」頁的位置欄填寫，不參與落差警告。</p>
+<p class="text-muted small mt-3">位置備註（客廳／窗台）請在「編輯」頁的位置欄填寫，不參與落差警告。物種知識同步請到詳情頁「進階」區。</p>
+

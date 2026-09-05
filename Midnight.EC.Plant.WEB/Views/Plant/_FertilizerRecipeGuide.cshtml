@@ -1,0 +1,96 @@
+@using Midnight.EC.Plant.WEB.Models.External
+@model FertilizerRecipeDto?
+@{
+    var f = Model;
+    if (f == null)
+    {
+        return;
+    }
+
+    var (strong, mild) = CareGuideJson.ResolveDilutionRange(f);
+    var npk = string.IsNullOrWhiteSpace(f.NpkHint) ? "20-20-20" : f.NpkHint.Trim();
+    var typeLabel = string.IsNullOrWhiteSpace(f.Type) ? "平衡液肥" : f.Type.Trim();
+    var frequency = string.IsNullOrWhiteSpace(f.Frequency) ? "生長季每月 1 次" : f.Frequency.Trim();
+    var notes = f.Notes;
+    var title = ViewBag.FertilizerBlockTitle as string ?? "施肥配方（可製作水肥）";
+}
+
+<div class="fertilizer-recipe mt-3">
+    <div class="fertilizer-recipe-title">@title</div>
+
+    <dl class="fertilizer-recipe-list">
+        <div><dt>肥種</dt><dd>@typeLabel</dd></div>
+        <div><dt>NPK 參考</dt><dd>@npk</dd></div>
+        <div><dt>稀釋比例</dt><dd>@strong–@mild 倍</dd></div>
+        <div><dt>施肥頻率</dt><dd>@frequency</dd></div>
+        @if (!string.IsNullOrWhiteSpace(notes))
+        {
+            <div><dt>其他提醒</dt><dd>@notes</dd></div>
+        }
+    </dl>
+
+    <div class="fertilizer-edu">
+        <h4 class="fertilizer-edu-heading">1. NPK @npk 是什麼？</h4>
+        <p class="care-guide-text mb-2">
+            NPK 分別代表植物最需要的三大營養素：<strong>氮 (N)</strong>－<strong>磷 (P)</strong>－<strong>鉀 (K)</strong>。
+            「@npk」表示這三種元素的比例（以標示百分比理解即可）。以常見平衡肥為例：
+        </p>
+        <ul class="care-bullet-list">
+            <li><strong>氮 (N)</strong>：促進長葉、讓植株翠綠</li>
+            <li><strong>磷 (P)</strong>：促進根部發育、有助開花結果</li>
+            <li><strong>鉀 (K)</strong>：強健莖幹、提高耐逆境能力</li>
+        </ul>
+        <p class="care-guide-text">
+            這類「平衡取向」的水肥適合一般觀葉或非特別催花期的日常養護；實際仍以本品種建議為準。
+        </p>
+
+        <h4 class="fertilizer-edu-heading">2. 稀釋比例 @strong–@mild 倍怎麼泡？</h4>
+        <p class="care-guide-text mb-2">
+            化學液肥／粉肥濃度高，直接使用容易「肥傷」燒根，必須兌水稀釋。以下以
+            <strong>1 cc 液體肥（或 1 克粉肥）</strong>為例：
+        </p>
+        <div class="table-responsive">
+            <table class="table table-sm fertilizer-table">
+                <thead>
+                    <tr>
+                        <th>稀釋倍數</th>
+                        <th>肥料用量</th>
+                        <th>需加入的水量</th>
+                        <th>適用時機</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>@strong 倍</td>
+                        <td>1 cc（或 1 克）</td>
+                        <td>@(strong) cc（約 @(strong >= 1000 ? $"{strong / 1000.0:0.#} 公升" : $"{strong} 毫升")）</td>
+                        <td>成株、生長旺盛、較耐肥時</td>
+                    </tr>
+                    <tr>
+                        <td>@mild 倍</td>
+                        <td>1 cc（或 1 克）</td>
+                        <td>@(mild) cc（約 @(mild >= 1000 ? $"{mild / 1000.0:0.#} 公升" : $"{mild} 毫升")）</td>
+                        <td>幼苗、剛換盆、第一次施肥或不確定耐肥度時</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="care-guide-text">
+            <strong>新手建議：</strong>永遠先遵守「薄肥勤施」。若不確定，一律先從
+            <strong>@mild 倍</strong>開始；植株無不良反應後，再視情況慢慢提高濃度。
+        </p>
+
+        <h4 class="fertilizer-edu-heading">3. 施肥頻率與季節（台灣）</h4>
+        <p class="care-guide-text mb-2">
+            建議頻率：<strong>@frequency</strong>。
+            台灣多數植栽的積極生長季多在春、夏（氣溫回暖、持續長新葉時）；此時代謝快，可依建議把稀釋水肥當一次「營養水」淋透至盆底微微流出即可。
+        </p>
+        <p class="care-guide-text mb-0">
+            <strong>秋冬請減少或停止施肥：</strong>氣溫下降後許多植物會半休眠或休眠，需肥量下降；持續施肥易造成鹽類累積、傷害根系。秋冬以清水澆水為主即可。
+            @if (!string.IsNullOrWhiteSpace(notes))
+            {
+                <span>補充：@notes</span>
+            }
+        </p>
+    </div>
+</div>

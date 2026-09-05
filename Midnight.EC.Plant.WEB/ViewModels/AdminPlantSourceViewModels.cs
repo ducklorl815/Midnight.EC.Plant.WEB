@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using Midnight.EC.Plant.WEB.Models.Enums;
 
 namespace Midnight.EC.Plant.WEB.ViewModels;
@@ -10,7 +10,7 @@ public class AdminPlantSourceListViewModel
 
 public class AdminPlantSourceListItemViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string? SpeciesName { get; set; }
     public string? Title { get; set; }
     public string Url { get; set; } = string.Empty;
@@ -23,7 +23,7 @@ public class AdminPlantSourceCreateViewModel
 {
     [Required(ErrorMessage = "請至少選擇一個物種")]
     [Display(Name = "關聯物種（可複選）")]
-    public int[] SpeciesIds { get; set; } = [];
+    public Guid[] SpeciesIds { get; set; } = [];
 
     [Required(ErrorMessage = "請輸入 URL")]
     [Display(Name = "URL")]
@@ -57,13 +57,13 @@ public class ParsedPreviewViewModel
     public string? ErrorMessage { get; set; }
     public int ReliabilityLevel { get; set; }
     public bool IsExisting { get; set; }
-    public int? ExistingSourceId { get; set; }
+    public Guid? ExistingSourceId { get; set; }
     public string? RawText { get; set; }
 }
 
 public class AdminPlantSourceDetailViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string? SpeciesName { get; set; }
     public List<string> LinkedSpeciesNames { get; set; } = [];
     public SourceType SourceType { get; set; }
@@ -78,6 +78,6 @@ public class AdminPlantSourceDetailViewModel
 
 public class SpeciesOptionViewModel
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
 }

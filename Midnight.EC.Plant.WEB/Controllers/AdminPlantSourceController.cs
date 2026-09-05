@@ -1,7 +1,8 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Midnight.EC.Plant.WEB.Models.DTOs;
-using Midnight.EC.Plant.WEB.Models.Repositories;
+using Midnight.EC.Plant.WEB.Models.Respository;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
+using Midnight.EC.Plant.WEB.Services.PlantSource;
 using Midnight.EC.Plant.WEB.ViewModels;
 
 namespace Midnight.EC.Plant.WEB.Controllers;
@@ -9,13 +10,13 @@ namespace Midnight.EC.Plant.WEB.Controllers;
 [Route("Admin/[controller]")]
 public class AdminPlantSourceController : Controller
 {
-    private readonly IPlantSourceService _plantSourceService;
-    private readonly IPlantSpeciesRepository _speciesRepository;
+    private readonly PlantSourceService _plantSourceService;
+    private readonly PlantSpeciesRespo _speciesRepository;
     private readonly ILogger<AdminPlantSourceController> _logger;
 
     public AdminPlantSourceController(
-        IPlantSourceService plantSourceService,
-        IPlantSpeciesRepository speciesRepository,
+        PlantSourceService plantSourceService,
+        PlantSpeciesRespo speciesRepository,
         ILogger<AdminPlantSourceController> logger)
     {
         _plantSourceService = plantSourceService;
@@ -37,7 +38,7 @@ public class AdminPlantSourceController : Controller
                 Url = s.Url,
                 SourceType = s.SourceType,
                 ReliabilityLevel = s.ReliabilityLevel,
-                CreatedAt = s.CreatedAt
+                CreatedAt = s.CreateDate
             }).ToList()
         };
 
@@ -115,7 +116,7 @@ public class AdminPlantSourceController : Controller
     }
 
     [HttpGet("{id:int}")]
-    public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Details(Guid id, CancellationToken cancellationToken)
     {
         var source = await _plantSourceService.GetByIdAsync(id, cancellationToken);
         if (source == null)
@@ -152,7 +153,7 @@ public class AdminPlantSourceController : Controller
 
     [HttpPost("{id:int}/Reparse")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Reparse(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Reparse(Guid id, CancellationToken cancellationToken)
     {
         try
         {
@@ -179,7 +180,7 @@ public class AdminPlantSourceController : Controller
         return model;
     }
 
-    private static string FormatSpeciesOptionName(Midnight.EC.Plant.WEB.Models.Entities.PlantSpecies species)
+    private static string FormatSpeciesOptionName(Midnight.EC.Plant.WEB.Models.Models.PlantSpeciesModel species)
     {
         var chinese = species.ChineseName ?? species.CommonName;
         if (!string.IsNullOrWhiteSpace(chinese) && !string.IsNullOrWhiteSpace(species.ScientificName))

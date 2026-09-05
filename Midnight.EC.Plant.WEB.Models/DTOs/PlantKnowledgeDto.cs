@@ -1,9 +1,9 @@
-namespace Midnight.EC.Plant.WEB.Models.DTOs;
+﻿namespace Midnight.EC.Plant.WEB.Models.DTOs;
 
 public class PlantKnowledgeDto
 {
-    public int Id { get; set; }
-    public int SpeciesId { get; set; }
+    public Guid Id { get; set; }
+    public Guid SpeciesId { get; set; }
     public string? LightRequirement { get; set; }
     public string? WaterRequirement { get; set; }
     public string? HumidityRequirement { get; set; }

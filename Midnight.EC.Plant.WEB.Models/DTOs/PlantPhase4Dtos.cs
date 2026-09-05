@@ -1,4 +1,4 @@
-using Midnight.EC.Plant.WEB.Models.Enums;
+﻿using Midnight.EC.Plant.WEB.Models.Enums;
 
 
 
@@ -10,9 +10,9 @@ public class PlantProfileDto
 
 {
 
-    public int Id { get; set; }
+    public Guid Id { get; set; }
 
-    public int PlantId { get; set; }
+    public Guid PlantId { get; set; }
 
     public int? WateringIntervalDays { get; set; }
 
@@ -31,11 +31,13 @@ public class PlantProfileDto
     public LightLevel? ActualLight { get; set; }
     public bool? HasRainCover { get; set; }
     public string? SubstrateType { get; set; }
+    public SaucerState? SaucerState { get; set; }
     public string? City { get; set; }
     public LightLevel? OverrideSuggestedLight { get; set; }
     public string? OverrideCareTaboosJson { get; set; }
     public bool WateringIntervalDetachedFromWiki { get; set; }
     public bool EnvironmentMismatchAcknowledged { get; set; }
+    public string? AiEnvironmentAdvice { get; set; }
 
 }
 
@@ -45,9 +47,9 @@ public class PlantReminderDto
 
 {
 
-    public int Id { get; set; }
+    public Guid Id { get; set; }
 
-    public int PlantId { get; set; }
+    public Guid PlantId { get; set; }
 
     public string? PlantName { get; set; }
 
@@ -81,7 +83,7 @@ public class PlantTimelineEventDto
 
     public string? Summary { get; set; }
 
-    public int? RelatedId { get; set; }
+    public Guid? RelatedId { get; set; }
 
     public int? HealthScore { get; set; }
 
@@ -93,7 +95,7 @@ public class PlantComparisonItemDto
 
 {
 
-    public int PlantId { get; set; }
+    public Guid PlantId { get; set; }
 
     public string Name { get; set; } = string.Empty;
 
@@ -135,7 +137,7 @@ public class PlantComparisonResultDto
 
 public class PlantDashboardItemDto
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? NickName { get; set; }
     public string DisplayName { get; set; } = string.Empty;

@@ -621,6 +621,107 @@ footer.footer {
     line-height: 1.7;
 }
 
+.care-guide-title {
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+
+.care-guide-scientific {
+    font-style: italic;
+    font-weight: 500;
+    color: var(--plant-muted);
+}
+
+.care-section-label {
+    font-weight: 600;
+    margin: 0.75rem 0 0.35rem;
+    color: var(--plant-brand-soft);
+}
+
+.care-numbered-list,
+.care-bullet-list {
+    margin: 0 0 0.5rem;
+    padding-left: 1.25rem;
+    line-height: 1.7;
+}
+
+.care-numbered-list li,
+.care-bullet-list li {
+    margin-bottom: 0.35rem;
+}
+
+.care-hint {
+    color: var(--plant-brand);
+    font-weight: 600;
+}
+
+.fertilizer-recipe {
+    background: #f0faf3;
+    border: 1px solid #cce8d4;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+}
+
+.fertilizer-recipe-title {
+    font-weight: 700;
+    color: var(--plant-brand);
+    margin-bottom: 0.5rem;
+}
+
+.fertilizer-recipe-list {
+    margin: 0;
+}
+
+.fertilizer-recipe-list > div {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr;
+    gap: 0.5rem 0.75rem;
+    padding: 0.25rem 0;
+}
+
+.fertilizer-recipe-list dt {
+    margin: 0;
+    color: var(--plant-brand-soft);
+    font-weight: 600;
+}
+
+.fertilizer-recipe-list dd {
+    margin: 0;
+}
+
+.fertilizer-edu {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px dashed #cce8d4;
+}
+
+.fertilizer-edu-heading {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--plant-brand);
+    margin: 0.85rem 0 0.4rem;
+}
+
+.fertilizer-table {
+    background: #fff;
+    border: 1px solid #d9eadf;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+}
+
+.fertilizer-table th {
+    background: #e8f6ec;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.fertilizer-table td,
+.fertilizer-table th {
+    vertical-align: middle;
+    font-size: 0.875rem;
+}
+
 .care-facts div {
     display: grid;
     grid-template-columns: 4rem 1fr;

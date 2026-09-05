@@ -1,8 +1,8 @@
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
 using Midnight.EC.Plant.WEB.Models.DTOs;
-using Midnight.EC.Plant.WEB.Models.Entities;
+using Midnight.EC.Plant.WEB.Models.Models;
 using Midnight.EC.Plant.WEB.Models.Extensions;
-using Midnight.EC.Plant.WEB.Models.Repositories;
+using Midnight.EC.Plant.WEB.Models.Respository;
 using Midnight.EC.Plant.WEB.Services.Configuration;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Utility.Hash;
@@ -18,7 +18,7 @@ public class LocalImageStorageService : IImageStorageService
         _options = options.Value;
     }
 
-    public async Task<StoredImageResult> SaveAsync(Stream stream, string originalFileName, string contentType, int plantId, CancellationToken cancellationToken = default)
+    public async Task<StoredImageResult> SaveAsync(Stream stream, string originalFileName, string contentType, Guid plantId, CancellationToken cancellationToken = default)
     {
         var extension = Path.GetExtension(originalFileName);
         var fileName = $"{Guid.NewGuid():N}{extension}";
@@ -56,15 +56,15 @@ public class LocalImageStorageService : IImageStorageService
     }
 }
 
-public class PlantImageService : IPlantImageService
+public class PlantImageService
 {
-    private readonly IPlantRepository _plantRepository;
-    private readonly IPlantImageRepository _imageRepository;
+    private readonly PlantRespo _plantRepository;
+    private readonly PlantImageRespo _imageRepository;
     private readonly IImageStorageService _imageStorageService;
 
     public PlantImageService(
-        IPlantRepository plantRepository,
-        IPlantImageRepository imageRepository,
+        PlantRespo plantRepository,
+        PlantImageRespo imageRepository,
         IImageStorageService imageStorageService)
     {
         _plantRepository = plantRepository;
@@ -72,20 +72,20 @@ public class PlantImageService : IPlantImageService
         _imageStorageService = imageStorageService;
     }
 
-    public async Task<List<PlantImageDto>> GetByPlantIdAsync(int plantId, CancellationToken cancellationToken = default)
+    public async Task<List<PlantImageDto>> GetByPlantIdAsync(Guid plantId, CancellationToken cancellationToken = default)
     {
         var images = await _imageRepository.GetByPlantIdAsync(plantId, cancellationToken);
         return images.Select(i => i.ToDto()).ToList();
     }
 
-    public async Task<PlantImageDto?> GetCoverAsync(int plantId, CancellationToken cancellationToken = default)
+    public async Task<PlantImageDto?> GetCoverAsync(Guid plantId, CancellationToken cancellationToken = default)
     {
         var cover = await _imageRepository.GetCoverByPlantIdAsync(plantId, cancellationToken);
         return cover?.ToDto();
     }
 
     public async Task<PlantImageDto> UploadAsync(
-        int plantId,
+        Guid plantId,
         Stream stream,
         string fileName,
         string contentType,
@@ -103,7 +103,7 @@ public class PlantImageService : IPlantImageService
             await _imageRepository.ClearCoverAsync(plantId, cancellationToken);
         }
 
-        var image = new PlantImage
+        var image = new PlantImageModel
         {
             PlantId = plantId,
             Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
@@ -118,18 +118,16 @@ public class PlantImageService : IPlantImageService
             CreatedAt = DateTime.UtcNow
         };
 
-        await _imageRepository.AddAsync(image, cancellationToken);
-        await _imageRepository.SaveChangesAsync(cancellationToken);
-
+        await _imageRepository.InsertAsync(image, cancellationToken);
         return image.ToDto();
     }
 
-    public async Task SetCoverAsync(int plantId, int imageId, CancellationToken cancellationToken = default)
+    public async Task SetCoverAsync(Guid plantId, Guid imageId, CancellationToken cancellationToken = default)
     {
         var image = await _imageRepository.GetByIdAsync(imageId, cancellationToken)
             ?? throw new InvalidOperationException("找不到圖片。");
 
-        if (image.PlantId != plantId)
+        if (image.PlantID != plantId)
         {
             throw new InvalidOperationException("圖片不屬於指定植物。");
         }
@@ -137,10 +135,9 @@ public class PlantImageService : IPlantImageService
         await _imageRepository.ClearCoverAsync(plantId, cancellationToken);
         image.IsCover = true;
         await _imageRepository.UpdateAsync(image, cancellationToken);
-        await _imageRepository.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task DeleteAsync(int imageId, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid imageId, CancellationToken cancellationToken = default)
     {
         var image = await _imageRepository.GetByIdAsync(imageId, cancellationToken)
             ?? throw new InvalidOperationException("找不到圖片。");
@@ -151,17 +148,15 @@ public class PlantImageService : IPlantImageService
             File.Delete(absolutePath);
         }
 
-        await _imageRepository.DeleteAsync(image, cancellationToken);
-        await _imageRepository.SaveChangesAsync(cancellationToken);
+        await _imageRepository.SoftDeleteAsync(image.Id, cancellationToken);
     }
 
-    public async Task UpdateNoteAsync(int imageId, string? note, CancellationToken cancellationToken = default)
+    public async Task UpdateNoteAsync(Guid imageId, string? note, CancellationToken cancellationToken = default)
     {
         var image = await _imageRepository.GetByIdAsync(imageId, cancellationToken)
             ?? throw new InvalidOperationException("找不到圖片。");
 
         image.Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
         await _imageRepository.UpdateAsync(image, cancellationToken);
-        await _imageRepository.SaveChangesAsync(cancellationToken);
     }
 }

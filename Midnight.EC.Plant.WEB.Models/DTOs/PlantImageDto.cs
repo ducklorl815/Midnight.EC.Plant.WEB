@@ -1,10 +1,10 @@
-namespace Midnight.EC.Plant.WEB.Models.DTOs;
+﻿namespace Midnight.EC.Plant.WEB.Models.DTOs;
 
 public class PlantImageDto
 {
-    public int Id { get; set; }
-    public int PlantId { get; set; }
-    public int? DiaryId { get; set; }
+    public Guid Id { get; set; }
+    public Guid PlantId { get; set; }
+    public Guid? DiaryId { get; set; }
     public string? Note { get; set; }
     public bool IsCover { get; set; }
     public string FileName { get; set; } = string.Empty;
@@ -15,6 +15,7 @@ public class PlantImageDto
     public int? Width { get; set; }
     public int? Height { get; set; }
     public long FileSize { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public DateTime CreateDate { get; set; }
+    public DateTime CreatedAt { get => CreateDate; set => CreateDate = value; }
     public PlantAnalysisDto? LatestAnalysis { get; set; }
 }

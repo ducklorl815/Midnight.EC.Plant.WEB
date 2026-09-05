@@ -1,4 +1,4 @@
-using Midnight.EC.Plant.WEB.Models.Enums;
+﻿using Midnight.EC.Plant.WEB.Models.Enums;
 
 namespace Midnight.EC.Plant.WEB.Models.DTOs;
 
@@ -22,13 +22,13 @@ public class ParsedContentDto
     public string? ErrorMessage { get; set; }
     public int ReliabilityLevel { get; set; } = 3;
     public bool IsExisting { get; set; }
-    public int? ExistingSourceId { get; set; }
+    public Guid? ExistingSourceId { get; set; }
 }
 
 public class PlantSourceDetailDto
 {
-    public int Id { get; set; }
-    public int SpeciesId { get; set; }
+    public Guid Id { get; set; }
+    public Guid SpeciesId { get; set; }
     public string? SpeciesName { get; set; }
     public List<string> LinkedSpeciesNames { get; set; } = [];
     public SourceType SourceType { get; set; }
@@ -38,14 +38,16 @@ public class PlantSourceDetailDto
     public string? Author { get; set; }
     public int ReliabilityLevel { get; set; }
     public string? ContentHash { get; set; }
-    public bool IsActive { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public bool Enabled { get; set; }
+    public bool IsActive { get => Enabled; set => Enabled = value; }
+    public DateTime CreateDate { get; set; }
+    public DateTime CreatedAt { get => CreateDate; set => CreateDate = value; }
     public PlantSourceContentDetailDto? LatestContent { get; set; }
 }
 
 public class PlantSourceContentDetailDto
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string? CleanText { get; set; }
     public string? Summary { get; set; }
     public string? Keywords { get; set; }
@@ -58,14 +60,16 @@ public class PlantSourceContentDetailDto
 
 public class PlantSourceListItemDto
 {
-    public int Id { get; set; }
-    public int SpeciesId { get; set; }
+    public Guid Id { get; set; }
+    public Guid SpeciesId { get; set; }
     public string? SpeciesName { get; set; }
     public List<string> LinkedSpeciesNames { get; set; } = [];
     public string? Title { get; set; }
     public string Url { get; set; } = string.Empty;
     public SourceType SourceType { get; set; }
     public int ReliabilityLevel { get; set; }
-    public bool IsActive { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public bool Enabled { get; set; }
+    public bool IsActive { get => Enabled; set => Enabled = value; }
+    public DateTime CreateDate { get; set; }
+    public DateTime CreatedAt { get => CreateDate; set => CreateDate = value; }
 }

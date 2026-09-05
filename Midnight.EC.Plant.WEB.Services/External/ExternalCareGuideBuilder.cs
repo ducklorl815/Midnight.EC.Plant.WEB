@@ -36,12 +36,17 @@ public static class ExternalCareGuideBuilder
         return sb.ToString().Trim();
     }
 
-    /// <summary>移除資料來源等後設資訊，僅保留可讀照護說明。</summary>
+    /// <summary>移除資料來源等後設資訊，僅保留可讀照護說明。結構化 JSON 原樣保留。</summary>
     public static string? SanitizeForDisplay(string? guide)
     {
         if (string.IsNullOrWhiteSpace(guide))
         {
             return guide;
+        }
+
+        if (CareGuideJson.LooksLikeJson(guide))
+        {
+            return guide.Trim();
         }
 
         var idx = guide.IndexOf("資料來源", StringComparison.Ordinal);

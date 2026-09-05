@@ -1,8 +1,7 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Midnight.EC.Plant.WEB.Models.Data;
-using Midnight.EC.Plant.WEB.Models.Repositories;
+using Midnight.EC.Plant.WEB.Models.Models;
+using Midnight.EC.Plant.WEB.Models.Respository;
 using Midnight.EC.Plant.WEB.Services.AI;
 using Midnight.EC.Plant.WEB.Services.Background;
 using Midnight.EC.Plant.WEB.Services.Configuration;
@@ -28,9 +27,7 @@ public static class ServiceCollectionExtensions
         services.Configure<ExternalPlantApiOptions>(configuration.GetSection(ExternalPlantApiOptions.SectionName));
         services.Configure<AiOptions>(configuration.GetSection(AiOptions.SectionName));
         services.Configure<StorageOptions>(configuration.GetSection(StorageOptions.SectionName));
-
-        services.AddDbContext<PlantDbContext>(options =>
-            options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+        services.Configure<DBList>(configuration.GetSection("ConnectionStrings"));
 
         services.AddHttpClient("ExternalPlantApi", client =>
         {
@@ -49,33 +46,32 @@ public static class ServiceCollectionExtensions
             client.Timeout = TimeSpan.FromSeconds(120);
         });
 
-        services.AddScoped<IPlantRepository, PlantRepository>();
-        services.AddScoped<IPlantSpeciesRepository, PlantSpeciesRepository>();
-        services.AddScoped<IPlantKnowledgeRepository, PlantKnowledgeRepository>();
-        services.AddScoped<IPlantDiaryRepository, PlantDiaryRepository>();
-        services.AddScoped<IPlantImageRepository, PlantImageRepository>();
-        services.AddScoped<IPlantAnalysisRepository, PlantAnalysisRepository>();
-        services.AddScoped<IPlantAnalysisJobRepository, PlantAnalysisJobRepository>();
-        services.AddScoped<IPlantSourceRepository, PlantSourceRepository>();
-        services.AddScoped<IPlantCareRecordRepository, PlantCareRecordRepository>();
-        services.AddScoped<IPlantProfileRepository, PlantProfileRepository>();
-        services.AddScoped<IPlantReminderRepository, PlantReminderRepository>();
+        services.AddScoped<PlantRespo>();
+        services.AddScoped<PlantSpeciesRespo>();
+        services.AddScoped<PlantKnowledgeRespo>();
+        services.AddScoped<PlantDiaryRespo>();
+        services.AddScoped<PlantImageRespo>();
+        services.AddScoped<PlantAnalysisRespo>();
+        services.AddScoped<PlantAnalysisJobRespo>();
+        services.AddScoped<PlantSourceRespo>();
+        services.AddScoped<PlantCareRecordRespo>();
+        services.AddScoped<PlantProfileRespo>();
+        services.AddScoped<PlantReminderRespo>();
 
-        services.AddScoped<IPlantService, PlantService>();
-        services.AddScoped<IPlantKnowledgeService, PlantKnowledgeService>();
-        services.AddScoped<IPlantDiaryService, PlantDiaryService>();
-        services.AddScoped<IPlantImageService, PlantImageService>();
-        services.AddScoped<IPlantSourceService, PlantSourceService>();
-        services.AddScoped<IPlantCareService, PlantCareService>();
-        services.AddScoped<IPlantProfileService, PlantProfileService>();
-        services.AddScoped<IPlantReminderService, PlantReminderService>();
-        services.AddScoped<IPlantTimelineService, PlantTimelineService>();
+        services.AddScoped<PlantService>();
+        services.AddScoped<PlantKnowledgeService>();
+        services.AddScoped<PlantDiaryService>();
+        services.AddScoped<PlantImageService>();
+        services.AddScoped<PlantSourceService>();
+        services.AddScoped<PlantCareService>();
+        services.AddScoped<PlantProfileService>();
+        services.AddScoped<PlantReminderService>();
+        services.AddScoped<PlantTimelineService>();
         services.AddScoped<IExternalPlantApiService, ExternalPlantApiService>();
         services.AddScoped<IImageStorageService, LocalImageStorageService>();
         services.AddScoped<IAIAgentService, OpenAIPlantAgentService>();
         services.AddScoped<ICareKnowledgeSynthesisService, CareKnowledgeSynthesisService>();
         services.AddScoped<PlantAnalysisService>();
-        services.AddScoped<IPlantAnalysisService>(sp => sp.GetRequiredService<PlantAnalysisService>());
 
         services.AddScoped<IContentFetcher, ContentFetcher>();
         services.AddScoped<IPlantContentParser, YouTubeParser>();

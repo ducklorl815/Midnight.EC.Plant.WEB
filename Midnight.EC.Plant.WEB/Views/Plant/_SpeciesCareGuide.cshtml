@@ -1,0 +1,44 @@
+@using Midnight.EC.Plant.WEB.Models.External
+@model SpeciesCareGuideDto?
+@{
+    var guide = Model;
+    var legacy = ViewBag.LegacyCareGuide as string;
+}
+
+@if (guide != null)
+{
+    <div class="care-block">
+        <div class="small text-muted mb-1">物種照護說明</div>
+        @if (!string.IsNullOrWhiteSpace(guide.ScientificName) || !string.IsNullOrWhiteSpace(guide.ChineseName))
+        {
+            <p class="care-guide-title mb-2">
+                @if (!string.IsNullOrWhiteSpace(guide.ScientificName) && !string.IsNullOrWhiteSpace(guide.ChineseName))
+                {
+                    <span class="care-guide-scientific">@guide.ScientificName</span>
+                    <span>（@guide.ChineseName）</span>
+                }
+                else if (!string.IsNullOrWhiteSpace(guide.ScientificName))
+                {
+                    <span class="care-guide-scientific">@guide.ScientificName</span>
+                }
+                else
+                {
+                    @guide.ChineseName
+                }
+            </p>
+        }
+        @if (!string.IsNullOrWhiteSpace(guide.Summary))
+        {
+            <div class="care-guide-text">@guide.Summary</div>
+        }
+        @if (guide.Fertilizer != null)
+        {
+            @await Html.PartialAsync("_FertilizerRecipeGuide", guide.Fertilizer)
+        }
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(legacy))
+{
+    <div class="small text-muted mb-1">物種照護說明</div>
+    <div class="care-guide-text">@legacy</div>
+}

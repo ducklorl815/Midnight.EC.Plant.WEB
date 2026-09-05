@@ -1,4 +1,5 @@
 @model Midnight.EC.Plant.WEB.ViewModels.CreatePlantViewModel
+@using Midnight.EC.Plant.WEB.Models.Enums
 
 @{
     ViewData["Title"] = "新增植栽";
@@ -6,25 +7,25 @@
 
 <div class="page-header mb-3">
     <h1 class="page-title">新增植栽</h1>
-    <p class="page-subtitle">暱稱必填；中文名用來查物種。外部查詢失敗時仍可先建檔。</p>
+    <p class="page-subtitle">暱稱與實際環境必填；確認物種後會一次同步知識並產出環境適配建議。</p>
 </div>
 
 <nav class="flow-steps" aria-label="新增步驟">
-    <span class="flow-step flow-step-active"><span class="flow-step-num">1</span> 基本資料</span>
+    <span class="flow-step flow-step-active"><span class="flow-step-num">1</span> 基本＋環境</span>
     <span class="flow-step"><span class="flow-step-num">2</span> 確認物種</span>
     <span class="flow-step"><span class="flow-step-num">3</span> 完成</span>
 </nav>
 
 <div class="row justify-content-center">
     <div class="col-lg-8 col-xl-7">
-        <section class="panel">
-            <div class="panel-header">
-                <strong>基本資料</strong>
-            </div>
-            <div class="panel-body">
-                <form asp-action="Create" method="post">
-                    <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+        <form asp-action="Create" method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
+            <section class="panel mb-4">
+                <div class="panel-header">
+                    <strong>基本資料</strong>
+                </div>
+                <div class="panel-body">
                     <div class="mb-3">
                         <label asp-for="NickName" class="form-label"></label>
                         <input asp-for="NickName" class="form-control" placeholder="例如：小烏龜（不可與其他盆重複）" />
@@ -53,21 +54,96 @@
                         <div class="col-md-6">
                             <label asp-for="Location" class="form-label"></label>
                             <input asp-for="Location" class="form-control" placeholder="例如：客廳窗台" />
+                            <div class="form-text">選填備註，與下方「實際環境」不同。</div>
                         </div>
                     </div>
 
-                    <div class="mb-3 mt-3">
+                    <div class="mb-0 mt-3">
                         <label asp-for="Description" class="form-label"></label>
                         <textarea asp-for="Description" class="form-control" rows="2" placeholder="選填"></textarea>
                     </div>
+                </div>
+            </section>
 
-                    <div class="d-flex flex-wrap gap-2">
-                        <button type="submit" class="btn btn-plant-primary">下一步：查物種</button>
-                        <a asp-action="Index" class="btn btn-outline-secondary">返回</a>
+            <section class="panel mb-4">
+                <div class="panel-header">
+                    <strong>實際環境</strong>
+                    <span class="text-muted small">六項皆必填</span>
+                </div>
+                <div class="panel-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label asp-for="ActualPlacement" class="form-label"></label>
+                            <select asp-for="ActualPlacement" class="form-select">
+                                <option value="">— 請選擇 —</option>
+                                <option value="@((int)PlacementType.Indoor)">@PlacementTypeDisplay.ToLabel(PlacementType.Indoor)</option>
+                                <option value="@((int)PlacementType.Outdoor)">@PlacementTypeDisplay.ToLabel(PlacementType.Outdoor)</option>
+                                <option value="@((int)PlacementType.Balcony)">@PlacementTypeDisplay.ToLabel(PlacementType.Balcony)</option>
+                            </select>
+                            <span asp-validation-for="ActualPlacement" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="ActualLight" class="form-label"></label>
+                            <select asp-for="ActualLight" class="form-select">
+                                <option value="">— 請選擇 —</option>
+                                <option value="@((int)LightLevel.None)">@LightLevelDisplay.ToLabel(LightLevel.None)</option>
+                                <option value="@((int)LightLevel.Diffuse)">@LightLevelDisplay.ToLabel(LightLevel.Diffuse)</option>
+                                <option value="@((int)LightLevel.HalfDay)">@LightLevelDisplay.ToLabel(LightLevel.HalfDay)</option>
+                                <option value="@((int)LightLevel.FullSun)">@LightLevelDisplay.ToLabel(LightLevel.FullSun)</option>
+                            </select>
+                            <span asp-validation-for="ActualLight" class="text-danger"></span>
+                            <ul class="form-text small mb-0 mt-2 ps-3">
+                                <li><strong>@LightLevelDisplay.ToLabel(LightLevel.None)</strong>：@LightLevelDisplay.ToHelp(LightLevel.None)</li>
+                                <li><strong>@LightLevelDisplay.ToLabel(LightLevel.Diffuse)</strong>：@LightLevelDisplay.ToHelp(LightLevel.Diffuse)</li>
+                                <li><strong>@LightLevelDisplay.ToLabel(LightLevel.HalfDay)</strong>：@LightLevelDisplay.ToHelp(LightLevel.HalfDay)</li>
+                                <li><strong>@LightLevelDisplay.ToLabel(LightLevel.FullSun)</strong>：@LightLevelDisplay.ToHelp(LightLevel.FullSun)</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="HasRainCover" class="form-label"></label>
+                            <select asp-for="HasRainCover" class="form-select">
+                                <option value="">— 請選擇 —</option>
+                                <option value="true">有遮雨</option>
+                                <option value="false">無遮雨</option>
+                            </select>
+                            <span asp-validation-for="HasRainCover" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="SubstrateType" class="form-label"></label>
+                            <input asp-for="SubstrateType" class="form-control" placeholder="例如：疏水顆粒土、泥炭混合" />
+                            <span asp-validation-for="SubstrateType" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="SaucerState" class="form-label"></label>
+                            <select asp-for="SaucerState" class="form-select">
+                                <option value="">— 請選擇 —</option>
+                                <option value="@((int)SaucerState.None)">@SaucerStateDisplay.ToLabel(SaucerState.None)</option>
+                                <option value="@((int)SaucerState.PresentDry)">@SaucerStateDisplay.ToLabel(SaucerState.PresentDry)</option>
+                                <option value="@((int)SaucerState.PresentWithWater)">@SaucerStateDisplay.ToLabel(SaucerState.PresentWithWater)</option>
+                            </select>
+                            <span asp-validation-for="SaucerState" class="text-danger"></span>
+                            <div class="form-text">@SaucerStateDisplay.PurposeHint</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="City" class="form-label"></label>
+                            <select asp-for="City" class="form-select">
+                                <option value="">— 請選擇縣市 —</option>
+                                @foreach (var city in TaiwanCities.All)
+                                {
+                                    <option value="@city">@city</option>
+                                }
+                            </select>
+                            <span asp-validation-for="City" class="text-danger"></span>
+                        </div>
                     </div>
-                </form>
+                </div>
+            </section>
+
+            <div class="d-flex flex-wrap gap-2 mb-4">
+                <button type="submit" class="btn btn-plant-primary">下一步：查物種</button>
+                <a asp-action="Index" class="btn btn-outline-secondary">返回</a>
             </div>
-        </section>
+        </form>
     </div>
 </div>
 
@@ -86,3 +162,4 @@
         })();
     </script>
 }
+

@@ -1,7 +1,9 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
+using Midnight.EC.Plant.WEB.Models.Respository;
+using Midnight.EC.Plant.WEB.Services.PlantAnalysis;
 
 namespace Midnight.EC.Plant.WEB.Services.Background;
 
@@ -25,8 +27,8 @@ public class PlantAnalysisBackgroundService : BackgroundService
             try
             {
                 using var scope = _scopeFactory.CreateScope();
-                var jobRepository = scope.ServiceProvider.GetRequiredService<Midnight.EC.Plant.WEB.Models.Repositories.IPlantAnalysisJobRepository>();
-                var analysisService = scope.ServiceProvider.GetRequiredService<PlantAnalysis.PlantAnalysisService>();
+                var jobRepository = scope.ServiceProvider.GetRequiredService<Midnight.EC.Plant.WEB.Models.Respository.PlantAnalysisJobRespo>();
+                var analysisService = scope.ServiceProvider.GetRequiredService<Midnight.EC.Plant.WEB.Services.PlantAnalysis.PlantAnalysisService>();
                 var aiAgentService = scope.ServiceProvider.GetRequiredService<IAIAgentService>();
 
                 var pendingJobs = await jobRepository.GetPendingJobsAsync(5, stoppingToken);

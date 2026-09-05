@@ -1,8 +1,7 @@
 @model Midnight.EC.Plant.WEB.ViewModels.PlantDetailViewModel
-@using Midnight.EC.Plant.WEB.Models.Extensions
+@using Midnight.EC.Plant.WEB.Models.External
 @{
     ViewData["Title"] = Model.DisplayName;
-    var fertilizerHint = Model.Knowledge?.FertilizerRequirement;
     var locationText = Model.Location;
 }
 
@@ -20,6 +19,10 @@
 @if (TempData["Error"] is string errorMessage)
 {
     <div class="alert alert-warning">@errorMessage</div>
+}
+@if (TempData["Warning"] is string warningMessage)
+{
+    <div class="alert alert-warning">@warningMessage</div>
 }
 @if (TempData["Flash"] is string flashMessage)
 {
@@ -85,85 +88,76 @@
             }
         </div>
         <div class="plant-hero-actions">
-            <a href="#today-log" class="btn btn-sm btn-plant-primary">記今日紀錄</a>
+            <a href="#log-entry" class="btn btn-sm btn-plant-primary">記一筆</a>
             <a asp-action="EditEnvironment" asp-route-id="@Model.Id" class="btn btn-sm btn-outline-secondary">補實際環境</a>
         </div>
     </div>
 </section>
 
-<section id="today-log" class="panel mb-4">
+<section id="log-entry" class="panel mb-4">
     <div class="panel-header">
-        <strong>今日紀錄</strong>
-        <span class="text-muted small">永遠記今天 · 照片可選</span>
+        <strong>記一筆</strong>
+        <span class="text-muted small">日期可今天或過去 · 照片可選</span>
     </div>
     <div class="panel-body">
-        <form asp-action="SaveTodayLog" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
+        <form asp-action="SaveLogEntry" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
-            <div class="d-flex flex-wrap gap-3 align-items-center mb-3">
-                <div class="form-check">
-                    <input asp-for="TodayLog.Watered" class="form-check-input" />
-                    <label asp-for="TodayLog.Watered" class="form-check-label fw-semibold">已澆水</label>
+            <div class="row g-3 align-items-end mb-3">
+                <div class="col-md-3">
+                    <label asp-for="LogEntry.LogDate" class="form-label"></label>
+                    <input asp-for="LogEntry.LogDate" class="form-control" type="date" />
                 </div>
-                <div class="form-check">
-                    <input asp-for="TodayLog.Fertilized" class="form-check-input" />
-                    <label asp-for="TodayLog.Fertilized" class="form-check-label">已施肥</label>
+                <div class="col-md-2">
+                    <div class="form-check mt-4">
+                        <input asp-for="LogEntry.Watered" class="form-check-input" />
+                        <label asp-for="LogEntry.Watered" class="form-check-label fw-semibold">澆水</label>
+                    </div>
                 </div>
-            </div>
-            <div class="mb-3">
-                <label asp-for="TodayLog.Note" class="form-label"></label>
-                <input asp-for="TodayLog.Note" class="form-control" placeholder="可選：草況一句話" />
+                <div class="col-md-2">
+                    <div class="form-check mt-4">
+                        <input asp-for="LogEntry.Fertilized" class="form-check-input" />
+                        <label asp-for="LogEntry.Fertilized" class="form-check-label">施肥</label>
+                    </div>
+                </div>
+                <div class="col-md-5">
+                    <label asp-for="LogEntry.Note" class="form-label"></label>
+                    <input asp-for="LogEntry.Note" class="form-control" placeholder="可選：草況一句話" />
+                </div>
             </div>
             <div class="mb-3">
                 <label class="form-label">照片（可選，可多張）</label>
                 <input type="file" name="photos" class="form-control" accept="image/*" multiple />
             </div>
             <button type="submit" class="btn btn-plant-primary">存檔</button>
-            <span class="text-muted small ms-2">只勾施肥也可以存</span>
+            <span class="text-muted small ms-2">至少勾選澆水／施肥，或寫備註／上傳照片</span>
         </form>
-    </div>
-</section>
 
-<section class="panel panel-quiet mb-4">
-    <div class="panel-header">
-        <strong>補記某日</strong>
-        <span class="text-muted small">只能過去 · 不限多久以前</span>
-    </div>
-    <div class="panel-body">
-        <form asp-action="BackfillLog" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" class="row g-3 align-items-end">
-            @Html.AntiForgeryToken()
-            <div class="col-md-3">
-                <label asp-for="BackfillLog.LogDate" class="form-label"></label>
-                <input asp-for="BackfillLog.LogDate" class="form-control" type="date" />
-            </div>
-            <div class="col-md-2">
-                <div class="form-check mt-4">
-                    <input asp-for="BackfillLog.Watered" class="form-check-input" />
-                    <label asp-for="BackfillLog.Watered" class="form-check-label">澆水</label>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="form-check mt-4">
-                    <input asp-for="BackfillLog.Fertilized" class="form-check-input" />
-                    <label asp-for="BackfillLog.Fertilized" class="form-check-label">施肥</label>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <label asp-for="BackfillLog.Note" class="form-label"></label>
-                <input asp-for="BackfillLog.Note" class="form-control" placeholder="可選" />
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-outline-secondary w-100">補記</button>
-            </div>
-            <div class="col-12">
-                <input type="file" name="photos" class="form-control form-control-sm" accept="image/*" multiple />
-            </div>
-        </form>
+        @if (Model.Timeline.Any())
+        {
+            <hr class="my-4" />
+            <div class="small text-muted mb-2">近期時間軸（澆水／施肥／備註）</div>
+            <ul class="list-group list-group-flush">
+                @foreach (var item in Model.Timeline.Take(30))
+                {
+                    <li class="list-group-item px-0 d-flex justify-content-between gap-3">
+                        <div>
+                            <span class="fw-semibold">@item.Title</span>
+                            @if (!string.IsNullOrWhiteSpace(item.Summary))
+                            {
+                                <span class="text-muted">· @item.Summary</span>
+                            }
+                        </div>
+                        <div class="text-muted small text-nowrap">@item.EventDate.ToString("yyyy/MM/dd")</div>
+                    </li>
+                }
+            </ul>
+        }
     </div>
 </section>
 
 <section class="panel mb-4">
     <div class="panel-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <strong>照片與日記</strong>
+        <strong>照片牆</strong>
         <span class="text-muted small">上傳後可對單張做 AI 分析</span>
     </div>
     <div class="panel-body">
@@ -229,6 +223,26 @@
                                         }
                                     </div>
                                     <p class="small mb-0">@photo.LatestAnalysis.Summary</p>
+                                    @{
+                                        FertilizerRecipeDto? photoFert = null;
+                                        if (!string.IsNullOrWhiteSpace(photo.LatestAnalysis.ResultJson))
+                                        {
+                                            var parsedAnalysis = Midnight.EC.Plant.WEB.Utility.Json.JsonHelper.Deserialize<Midnight.EC.Plant.WEB.Models.AI.PlantAnalysisResultDto>(photo.LatestAnalysis.ResultJson);
+                                            photoFert = parsedAnalysis?.FertilizerAdvice;
+                                        }
+                                    }
+                                    @if (photoFert != null)
+                                    {
+                                        ViewBag.FertilizerBlockTitle = "施肥建議（可製作水肥）";
+                                        @await Html.PartialAsync("_FertilizerRecipeGuide", photoFert)
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(photo.LatestAnalysis.FertilizerAdviceText))
+                                    {
+                                        <div class="fertilizer-recipe mt-2">
+                                            <div class="fertilizer-recipe-title">施肥建議</div>
+                                            <div class="small mb-0">@photo.LatestAnalysis.FertilizerAdviceText</div>
+                                        </div>
+                                    }
                                 </div>
                             }
 
@@ -253,76 +267,6 @@
                     </article>
                 }
             </div>
-        }
-    </div>
-</section>
-
-<section class="panel mb-4">
-    <div class="panel-header"><strong>照護紀錄</strong></div>
-    <div class="panel-body">
-        @if (!string.IsNullOrWhiteSpace(fertilizerHint))
-        {
-            <div class="fertilizer-hint mb-3">
-                <strong>施肥參考：</strong>@fertilizerHint
-            </div>
-        }
-
-        <form asp-action="CreateCareRecord" asp-route-id="@Model.Id" method="post" class="upload-panel mb-4">
-            @Html.AntiForgeryToken()
-            <div class="row g-3 align-items-end">
-                <div class="col-md-2">
-                    <label asp-for="NewCareRecord.RecordDate" class="form-label"></label>
-                    <input asp-for="NewCareRecord.RecordDate" class="form-control" type="date" />
-                </div>
-                <div class="col-md-2">
-                    <label asp-for="NewCareRecord.CareType" class="form-label"></label>
-                    <select asp-for="NewCareRecord.CareType" class="form-select" asp-items="Html.GetEnumSelectList<Midnight.EC.Plant.WEB.Models.Enums.CareRecordType>()"></select>
-                </div>
-                <div class="col-md-2">
-                    <label asp-for="NewCareRecord.NumericValue" class="form-label"></label>
-                    <input asp-for="NewCareRecord.NumericValue" class="form-control" type="number" step="0.1" />
-                </div>
-                <div class="col-md-2">
-                    <label asp-for="NewCareRecord.Unit" class="form-label"></label>
-                    <input asp-for="NewCareRecord.Unit" class="form-control" placeholder="ml / 倍數" />
-                </div>
-                <div class="col-md-3">
-                    <label asp-for="NewCareRecord.Note" class="form-label"></label>
-                    <input asp-for="NewCareRecord.Note" class="form-control" placeholder="例如：薄肥勤施" />
-                </div>
-                <div class="col-md-1">
-                    <button type="submit" class="btn btn-plant-primary w-100">新增</button>
-                </div>
-            </div>
-        </form>
-
-        @if (Model.CareRecords.Any())
-        {
-            <div class="table-responsive">
-                <table class="table table-sm align-middle">
-                    <thead>
-                        <tr>
-                            <th>日期</th>
-                            <th>類型</th>
-                            <th>內容</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var record in Model.CareRecords.Take(20))
-                        {
-                            <tr>
-                                <td>@record.RecordDate.ToString("yyyy/MM/dd")</td>
-                                <td>@record.CareType.GetDisplayName()</td>
-                                <td>@record.DisplayValue</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        }
-        else
-        {
-            <p class="text-muted mb-0">尚無照護紀錄。</p>
         }
     </div>
 </section>
@@ -361,19 +305,40 @@
     <div class="col-lg-7">
         <section class="panel h-100">
             <div class="panel-header">
-                <strong>知識與照護說明</strong>
+                <strong>物種照護知識</strong>
                 <span class="badge-soft">外部來源</span>
             </div>
             <div class="panel-body">
-                @if (!string.IsNullOrWhiteSpace(Model.Knowledge?.ExternalCareGuide))
+                @{
+                    var speciesGuide = CareGuideJson.TryParseSpeciesGuide(Model.Knowledge?.ExternalCareGuide);
+                    ViewBag.LegacyCareGuide = speciesGuide == null ? Model.Knowledge?.ExternalCareGuide : null;
+                    var suggestedDays = Model.CareSuggestions.SuggestedWateringIntervalDays;
+                    var myDays = Model.Profile.WateringIntervalDays;
+                }
+                <div class="care-facts mb-3">
+                    @if (suggestedDays.HasValue)
+                    {
+                        <div><span>建議澆水</span>每 @suggestedDays 天</div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(Model.Knowledge?.WaterRequirement))
+                    {
+                        <div><span>澆水</span>@Model.Knowledge.WaterRequirement</div>
+                    }
+                    @if (myDays.HasValue)
+                    {
+                        <div><span>我的澆水週期</span>每 @myDays 天</div>
+                    }
+                </div>
+
+                @if (speciesGuide != null || !string.IsNullOrWhiteSpace(Model.Knowledge?.ExternalCareGuide))
                 {
-                    <div class="care-guide-text">@Model.Knowledge.ExternalCareGuide</div>
+                    @await Html.PartialAsync("_SpeciesCareGuide", speciesGuide)
                 }
                 else if (Model.Knowledge != null && !Model.Knowledge.IsSparse)
                 {
                     <div class="care-facts">
                         @if (!string.IsNullOrWhiteSpace(Model.Knowledge.LightRequirement)) { <div><span>光照</span>@Model.Knowledge.LightRequirement</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.WaterRequirement)) { <div><span>澆水</span>@Model.Knowledge.WaterRequirement</div> }
+                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.WaterRequirement) && !suggestedDays.HasValue) { <div><span>澆水</span>@Model.Knowledge.WaterRequirement</div> }
                         @if (!string.IsNullOrWhiteSpace(Model.Knowledge.SoilRequirement)) { <div><span>土壤</span>@Model.Knowledge.SoilRequirement</div> }
                         @if (!string.IsNullOrWhiteSpace(Model.Knowledge.FertilizerRequirement)) { <div><span>施肥</span>@Model.Knowledge.FertilizerRequirement</div> }
                         @if (!string.IsNullOrWhiteSpace(Model.Knowledge.TemperatureRange)) { <div><span>溫度</span>@Model.Knowledge.TemperatureRange</div> }
@@ -383,6 +348,8 @@
                 {
                     <p class="text-muted mb-3">尚無官方說明，可在下方進階區同步外部資料。</p>
                 }
+
+                @await Html.PartialAsync("_EnvironmentAdvice", Model.Profile)
 
                 @if (!string.IsNullOrWhiteSpace(Model.Description))
                 {

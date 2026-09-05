@@ -1,9 +1,9 @@
-namespace Midnight.EC.Plant.WEB.Models.DTOs;
+﻿namespace Midnight.EC.Plant.WEB.Models.DTOs;
 
 public class PlantSourceContentDto
 {
-    public int Id { get; set; }
-    public int SourceId { get; set; }
+    public Guid Id { get; set; }
+    public Guid SourceId { get; set; }
     public string? SourceTitle { get; set; }
     public string? SourceUrl { get; set; }
     public int ReliabilityLevel { get; set; }

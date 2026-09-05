@@ -1,8 +1,8 @@
-namespace Midnight.EC.Plant.WEB.Models.DTOs;
+﻿namespace Midnight.EC.Plant.WEB.Models.DTOs;
 
 public class PlantSpeciesDto
 {
-    public int Id { get; set; }
+    public Guid Id { get; set; }
     public string ScientificName { get; set; } = string.Empty;
     public string? CommonName { get; set; }
     public string? ChineseName { get; set; }

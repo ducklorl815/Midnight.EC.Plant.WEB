@@ -11,8 +11,21 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
+  </ItemGroup>
+
+  <!-- 舊 EF 層已由 Models/*Model + Respository/*Respo 取代；目錄可稍後手動刪除 -->
+  <ItemGroup>
+    <Compile Remove="Entities\**" />
+    <Compile Remove="Repositories\**" />
+    <Compile Remove="Data\**" />
+    <Compile Remove="Migrations\**" />
+    <None Include="Entities\**" />
+    <None Include="Repositories\**" />
+    <None Include="Data\**" />
+    <None Include="Migrations\**" />
   </ItemGroup>
 
 </Project>

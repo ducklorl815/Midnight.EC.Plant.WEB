@@ -1,9 +1,10 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Midnight.EC.Plant.WEB.Models.AI;
+using Midnight.EC.Plant.WEB.Models.Enums;
 using Midnight.EC.Plant.WEB.Services.Configuration;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Utility.Json;
@@ -12,7 +13,7 @@ namespace Midnight.EC.Plant.WEB.Services.AI;
 
 public class OpenAIPlantAgentService : IAIAgentService
 {
-    public const string PromptVersion = "plant-analysis-v3";
+    public const string PromptVersion = "plant-analysis-v5";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly AiOptions _options;
@@ -71,12 +72,18 @@ public class OpenAIPlantAgentService : IAIAgentService
                 {
                     role = "system",
                     content = """
-                        你是植栽照護助理。只能根據提供的資料判斷，不確定時必須說不確定，不可直接宣稱植物得病。
-                        必須區分 Observed / Possible / Recommended。
+                        你是植栽照護助理，服務對象為台灣／繁體中文使用者。
+                        【語言強制】所有給使用者閱讀的文字必須使用繁體中文（台灣用字），禁止簡體中文；學名、URL、數字可維持原文。
+                        JSON 欄位名稱維持英文字鍵；欄位值用繁體中文。
+                        【實際環境】若提供實際位置／日照／遮雨／介質，必須對照物種需求分析落差與可能問題，不可只寫百科通識。
+                        【施肥】必須輸出 fertilizerAdvice：{ type, npkHint, dilution, dilutionStrong, dilutionMild, frequency, notes }；說明要可供新手製作水肥（含倍數）。
+                        命名：以學名為準；若有使用者中文名可用，勿自行發明其他中文俗名。
+                        只能根據提供的資料判斷，不確定時必須說不確定，不可直接宣稱植物得病。
+                        必須區分 Observed / Possible / Recommended（可用繁體說明：已觀察到／可能原因／建議作法）。
                         若引用外部來源，請在 citations 陣列中標記 sourceTitle、sourceUrl、reliabilityLevel、usedFor。
                         優先參考 reliabilityLevel 較低（數字越小越可靠）的來源。
                         若使用者提供照片，請仔細觀察葉片、莖部、顏色、斑點、蟲害等視覺特徵，並結合使用者備註分析。
-                        輸出 JSON 欄位：summary, healthScore, observations, possibleIssues, environmentAssessment, recommendations, warning, citations, growthTrend, wateringAdvice, pestRisk, alerts, confidence, needsHumanReview。
+                        輸出 JSON 欄位：summary, healthScore, observations, possibleIssues, environmentAssessment, recommendations, warning, citations, growthTrend, wateringAdvice, pestRisk, alerts, confidence, needsHumanReview, fertilizerAdvice。
                         """
                 },
                 userMessage
@@ -110,6 +117,8 @@ public class OpenAIPlantAgentService : IAIAgentService
     private static string BuildPrompt(PlantAnalysisContext context)
     {
         var sb = new StringBuilder();
+        sb.AppendLine("請全程以繁體中文（台灣用字）回覆分析結果，不要使用簡體中文。");
+        sb.AppendLine("請一併給出可執行的水肥配方（fertilizerAdvice：肥種、稀釋倍數、頻率）。");
         sb.AppendLine($"植物：{context.Plant.Name}");
         sb.AppendLine($"位置：{context.Plant.Location}");
         sb.AppendLine($"分析範圍：{context.Scope}");
@@ -144,7 +153,7 @@ public class OpenAIPlantAgentService : IAIAgentService
             sb.AppendLine("歷史 AI 分析：");
             foreach (var analysis in context.PreviousAnalyses.Take(5))
             {
-                sb.AppendLine($"- {analysis.CreatedAt:yyyy-MM-dd}: 健康度 {analysis.HealthScore}，{analysis.Summary}");
+                sb.AppendLine($"- {analysis.CreateDate:yyyy-MM-dd}: 健康度 {analysis.HealthScore}，{analysis.Summary}");
             }
         }
 
@@ -168,6 +177,17 @@ public class OpenAIPlantAgentService : IAIAgentService
 
         if (context.Profile != null)
         {
+            sb.AppendLine("【使用者實際環境】（分析時必須對照，不可忽略）");
+            sb.AppendLine($"- 實際位置類型：{(context.Profile.ActualPlacement.HasValue ? PlacementTypeDisplay.ToLabel(context.Profile.ActualPlacement) : "未設定")}");
+            sb.AppendLine($"- 實際日照：{(context.Profile.ActualLight.HasValue ? LightLevelDisplay.ToLabel(context.Profile.ActualLight) : "未設定")}");
+            sb.AppendLine($"- 遮雨：{(context.Profile.HasRainCover == true ? "有遮雨" : context.Profile.HasRainCover == false ? "無遮雨" : "未設定")}");
+            sb.AppendLine($"- 介質：{context.Profile.SubstrateType ?? "未設定"}");
+            sb.AppendLine($"- 水盤狀態：{(context.Profile.SaucerState.HasValue ? SaucerStateDisplay.ToLabel(context.Profile.SaucerState) : "未設定")}");
+            sb.AppendLine($"- 縣市：{context.Profile.City ?? "未設定"}");
+            if (!string.IsNullOrWhiteSpace(context.Profile.AiEnvironmentAdvice))
+            {
+                sb.AppendLine($"- 既有環境適配建議：{context.Profile.AiEnvironmentAdvice}");
+            }
             sb.AppendLine("個人化植物設定：");
             if (context.Profile.WateringIntervalDays.HasValue)
             {
@@ -235,7 +255,7 @@ public class OpenAIPlantAgentService : IAIAgentService
             PossibleIssues = [],
             Recommendations = ["持續記錄日記、環境數據與澆水紀錄。", "可至 Admin 後台新增更多外部文章來源。"],
             GrowthTrend = context.PreviousAnalyses.Count >= 2 ? "資料不足，待更多分析後可判斷。" : "尚無足夠歷史分析。",
-            WateringAdvice = "請依 PlantKnowledge 與最近澆水紀錄自行調整。",
+            WateringAdvice = "請依 PlantKnowledgeModel 與最近澆水紀錄自行調整。",
             PestRisk = "資料不足，請持續觀察葉片與莖部。",
             Alerts = [],
             Citations = citations,

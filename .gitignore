@@ -7,3 +7,5 @@ Midnight.EC.Plant.WEB.Service/bin/
 Midnight.EC.Plant.WEB.Service/obj/
 Midnight.EC.Plant.WEB.Utility/bin/
 Midnight.EC.Plant.WEB.Utility/obj/
+
+appsettings.Development.json

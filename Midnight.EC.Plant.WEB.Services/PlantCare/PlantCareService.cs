@@ -1,35 +1,35 @@
-using Midnight.EC.Plant.WEB.Models.DTOs;
+﻿using Midnight.EC.Plant.WEB.Models.DTOs;
 using Midnight.EC.Plant.WEB.Models.Enums;
 using Midnight.EC.Plant.WEB.Models.Extensions;
-using Midnight.EC.Plant.WEB.Models.Repositories;
+using Midnight.EC.Plant.WEB.Models.Respository;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
 
 namespace Midnight.EC.Plant.WEB.Services.PlantCare;
 
-public class PlantCareService : IPlantCareService
+public class PlantCareService
 {
-    private readonly IPlantCareRecordRepository _careRepository;
-    private readonly IPlantAnalysisRepository _analysisRepository;
-    private readonly IPlantRepository _plantRepository;
+    private readonly PlantCareRecordRespo _careRepository;
+    private readonly PlantAnalysisRespo _analysisRepository;
+    private readonly PlantRespo _plantRepository;
 
     public PlantCareService(
-        IPlantCareRecordRepository careRepository,
-        IPlantAnalysisRepository analysisRepository,
-        IPlantRepository plantRepository)
+        PlantCareRecordRespo careRepository,
+        PlantAnalysisRespo analysisRepository,
+        PlantRespo plantRepository)
     {
         _careRepository = careRepository;
         _analysisRepository = analysisRepository;
         _plantRepository = plantRepository;
     }
 
-    public async Task<List<PlantCareRecordDto>> GetByPlantIdAsync(int plantId, CancellationToken cancellationToken = default)
+    public async Task<List<PlantCareRecordDto>> GetByPlantIdAsync(Guid plantId, CancellationToken cancellationToken = default)
     {
         var records = await _careRepository.GetByPlantIdAsync(plantId, cancellationToken);
         return records.Select(r => r.ToDto()).ToList();
     }
 
     public async Task<PlantCareRecordDto> CreateAsync(
-        int plantId,
+        Guid plantId,
         DateTime recordDate,
         CareRecordType careType,
         decimal? numericValue,
@@ -60,12 +60,11 @@ public class PlantCareService : IPlantCareService
                 }
 
                 await _careRepository.UpdateAsync(existing, cancellationToken);
-                await _careRepository.SaveChangesAsync(cancellationToken);
                 return existing.ToDto();
             }
         }
 
-        var record = new Midnight.EC.Plant.WEB.Models.Entities.PlantCareRecord
+        var record = new Midnight.EC.Plant.WEB.Models.Models.PlantCareRecordModel
         {
             PlantId = plant.Id,
             RecordDate = day,
@@ -76,17 +75,16 @@ public class PlantCareService : IPlantCareService
             CreatedAt = DateTime.UtcNow
         };
 
-        await _careRepository.AddAsync(record, cancellationToken);
-        await _careRepository.SaveChangesAsync(cancellationToken);
+        await _careRepository.InsertAsync(record, cancellationToken);
         return record.ToDto();
     }
 
-    public async Task<PlantTrendDto> GetTrendAsync(int plantId, int days = 30, CancellationToken cancellationToken = default)
+    public async Task<PlantTrendDto> GetTrendAsync(Guid plantId, int days = 30, CancellationToken cancellationToken = default)
     {
         var since = DateTime.UtcNow.Date.AddDays(-days + 1);
         var careRecords = await _careRepository.GetRecentByPlantIdAsync(plantId, since, cancellationToken);
         var analyses = await _analysisRepository.GetByPlantIdAsync(plantId, cancellationToken);
-        var recentAnalyses = analyses.Where(a => a.CreatedAt >= since).ToList();
+        var recentAnalyses = analyses.Where(a => a.CreateDate >= since).ToList();
 
         var trend = new PlantTrendDto();
         for (var i = 0; i < days; i++)
@@ -102,8 +100,8 @@ public class PlantCareService : IPlantCareService
             trend.WateringCounts.Add(dayCare.Count(r => r.CareType == CareRecordType.Watering));
 
             var dayAnalysis = recentAnalyses
-                .Where(a => a.CreatedAt.Date == date.Date)
-                .OrderByDescending(a => a.CreatedAt)
+                .Where(a => a.CreateDate.Date == date.Date)
+                .OrderByDescending(a => a.CreateDate)
                 .FirstOrDefault();
             trend.HealthScores.Add(dayAnalysis?.HealthScore);
         }
@@ -115,7 +113,7 @@ public class PlantCareService : IPlantCareService
         return trend;
     }
 
-    private static decimal? AverageValue(List<Midnight.EC.Plant.WEB.Models.Entities.PlantCareRecord> records, CareRecordType type)
+    private static decimal? AverageValue(List<Midnight.EC.Plant.WEB.Models.Models.PlantCareRecordModel> records, CareRecordType type)
     {
         var values = records.Where(r => r.CareType == type && r.NumericValue.HasValue).Select(r => r.NumericValue!.Value).ToList();
         return values.Count == 0 ? null : values.Average();

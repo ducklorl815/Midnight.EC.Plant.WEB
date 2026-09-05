@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Midnight.EC.Plant.WEB.Models.AI;
 using Midnight.EC.Plant.WEB.Models.DTOs;
@@ -8,6 +8,13 @@ using Midnight.EC.Plant.WEB.Models.External;
 using Midnight.EC.Plant.WEB.Services.External;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Services.Plant;
+using Midnight.EC.Plant.WEB.Services.PlantAnalysis;
+using Midnight.EC.Plant.WEB.Services.PlantCare;
+using Midnight.EC.Plant.WEB.Services.PlantDiary;
+using Midnight.EC.Plant.WEB.Services.PlantKnowledge;
+using Midnight.EC.Plant.WEB.Services.PlantProfile;
+using Midnight.EC.Plant.WEB.Services.PlantReminder;
+using Midnight.EC.Plant.WEB.Services.PlantTimeline;
 using Midnight.EC.Plant.WEB.Utility.Json;
 using Midnight.EC.Plant.WEB.ViewModels;
 
@@ -15,28 +22,28 @@ namespace Midnight.EC.Plant.WEB.Controllers;
 
 public class PlantController : Controller
 {
-    private readonly IPlantService _plantService;
-    private readonly IPlantDiaryService _diaryService;
-    private readonly IPlantImageService _imageService;
-    private readonly IPlantAnalysisService _analysisService;
-    private readonly IPlantCareService _careService;
-    private readonly IPlantProfileService _profileService;
-    private readonly IPlantReminderService _reminderService;
-    private readonly IPlantTimelineService _timelineService;
-    private readonly IPlantKnowledgeService _knowledgeService;
+    private readonly PlantService _plantService;
+    private readonly PlantDiaryService _diaryService;
+    private readonly PlantImageService _imageService;
+    private readonly PlantAnalysisService _analysisService;
+    private readonly PlantCareService _careService;
+    private readonly PlantProfileService _profileService;
+    private readonly PlantReminderService _reminderService;
+    private readonly PlantTimelineService _timelineService;
+    private readonly PlantKnowledgeService _knowledgeService;
     private readonly IImageStorageService _imageStorageService;
     private readonly ILogger<PlantController> _logger;
 
     public PlantController(
-        IPlantService plantService,
-        IPlantDiaryService diaryService,
-        IPlantImageService imageService,
-        IPlantAnalysisService analysisService,
-        IPlantCareService careService,
-        IPlantProfileService profileService,
-        IPlantReminderService reminderService,
-        IPlantTimelineService timelineService,
-        IPlantKnowledgeService knowledgeService,
+        PlantService plantService,
+        PlantDiaryService diaryService,
+        PlantImageService imageService,
+        PlantAnalysisService analysisService,
+        PlantCareService careService,
+        PlantProfileService profileService,
+        PlantReminderService reminderService,
+        PlantTimelineService timelineService,
+        PlantKnowledgeService knowledgeService,
         IImageStorageService imageStorageService,
         ILogger<PlantController> logger)
     {
@@ -87,7 +94,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> BatchWater(int[]? plantIds, CancellationToken cancellationToken)
+    public async Task<IActionResult> BatchWater(Guid[]? plantIds, CancellationToken cancellationToken)
     {
         if (plantIds == null || plantIds.Length == 0)
         {
@@ -117,7 +124,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SetLastWateringDate(int plantId, DateTime lastWateringDate, CancellationToken cancellationToken)
+    public async Task<IActionResult> SetLastWateringDate(Guid plantId, DateTime lastWateringDate, CancellationToken cancellationToken)
     {
         if (lastWateringDate.Date > DateTime.Today)
         {
@@ -187,6 +194,11 @@ public class PlantController : Controller
             model.NickName = model.ChineseName.Trim();
         }
 
+        if (!IsCreateEnvironmentComplete(model))
+        {
+            ModelState.AddModelError(string.Empty, "請填齊實際環境六項後再查物種。");
+        }
+
         if (!ModelState.IsValid)
         {
             return View(model);
@@ -229,6 +241,12 @@ public class PlantController : Controller
             return View("Create", model.Draft ?? new CreatePlantViewModel());
         }
 
+        if (!IsCreateEnvironmentComplete(model.Draft))
+        {
+            ModelState.AddModelError(string.Empty, "實際環境不完整，請返回上一步補齊。");
+            return View("Create", model.Draft);
+        }
+
         if (model.SelectedIndex is null ||
             model.Candidates == null ||
             model.SelectedIndex < 0 ||
@@ -239,14 +257,35 @@ public class PlantController : Controller
         }
 
         var selected = model.Candidates[model.SelectedIndex.Value];
+        var external = ToExternal(selected);
+
         try
         {
-            var plant = await _plantService.CreateFromDraftAsync(
-                ToDraft(model.Draft),
-                ToExternal(selected),
-                cancellationToken);
+            // 先同步物種知識，才能比對環境落差；尚未建檔
+            var speciesId = await _plantService.EnsureSpeciesKnowledgeAsync(external, model.Draft.ChineseName, cancellationToken);
 
-            TempData["Flash"] = "植物已建立。提醒週期預設 7 天；若知識有建議週期，可之後在單盆確認是否套用。";
+            var warnings = await BuildDraftMismatchWarningsAsync(speciesId, model.Draft, cancellationToken);
+            if (warnings.Count > 0 && !model.AcknowledgeMismatch)
+            {
+                model.MismatchWarnings = warnings;
+                ModelState.AddModelError(nameof(model.AcknowledgeMismatch), "實際環境與建議有落差，請勾選「我知道環境不理想」後再建立。");
+                return View(model);
+            }
+
+            var draft = ToDraft(model.Draft);
+            draft.EnvironmentMismatchAcknowledged = warnings.Count > 0;
+
+            var plant = await _plantService.CreateFromDraftAsync(draft, external, cancellationToken);
+
+            var envFit = await _knowledgeService.RefreshEnvironmentAdviceAsync(plant.Id, cancellationToken);
+            TempData["Flash"] = envFit.Succeeded
+                ? "植物已建立，並已同步物種知識與環境適配建議。"
+                : envFit.SkippedNoEnvironment
+                    ? "植物已建立，並已同步物種知識。"
+                    : string.IsNullOrWhiteSpace(envFit.FailureReason)
+                        ? "植物已建立，並已同步物種知識。"
+                        : $"植物已建立並同步物種知識；環境適配建議失敗：{envFit.FailureReason}";
+
             return RedirectToAction(nameof(Details), new { id = plant.Id });
         }
         catch (Exception ex)
@@ -255,6 +294,13 @@ public class PlantController : Controller
             ModelState.AddModelError(string.Empty, ex.Message);
             return View(model);
         }
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult BackToCreate(ConfirmSpeciesViewModel model)
+    {
+        return View("Create", model.Draft ?? new CreatePlantViewModel { WateredToday = true });
     }
 
     [HttpPost]
@@ -303,10 +349,16 @@ public class PlantController : Controller
             return RedirectToAction(nameof(Create));
         }
 
+        if (!IsCreateEnvironmentComplete(model.Draft))
+        {
+            ModelState.AddModelError(string.Empty, "請先填齊實際環境六項。");
+            return View("Create", model.Draft);
+        }
+
         try
         {
             var plant = await _plantService.CreateFromDraftAsync(ToDraft(model.Draft), null, cancellationToken);
-            TempData["Flash"] = "已先建檔（物種未確認）。可之後補知識。";
+            TempData["Flash"] = "已先建檔（物種未確認）。實際環境已保存；請之後在詳情頁同步知識（此時不打 AI）。";
             return RedirectToAction(nameof(Details), new { id = plant.Id });
         }
         catch (Exception ex)
@@ -325,8 +377,50 @@ public class PlantController : Controller
         Location = model.Location,
         Description = model.Description,
         StartDate = model.StartDate,
-        WateredToday = model.WateredToday
+        WateredToday = model.WateredToday,
+        ActualPlacement = model.ActualPlacement,
+        ActualLight = model.ActualLight,
+        HasRainCover = model.HasRainCover,
+        SubstrateType = model.SubstrateType,
+        SaucerState = model.SaucerState,
+        City = model.City
     };
+
+    private static bool IsCreateEnvironmentComplete(CreatePlantViewModel model) =>
+        model.ActualPlacement != null
+        && model.ActualLight != null
+        && model.HasRainCover != null
+        && !string.IsNullOrWhiteSpace(model.SubstrateType)
+        && model.SaucerState != null
+        && !string.IsNullOrWhiteSpace(model.City);
+
+    private async Task<List<string>> BuildDraftMismatchWarningsAsync(
+        Guid speciesId,
+        CreatePlantViewModel draft,
+        CancellationToken cancellationToken)
+    {
+        var knowledge = await _knowledgeService.GetBySpeciesIdAsync(speciesId, cancellationToken);
+        if (knowledge == null)
+        {
+            return [];
+        }
+
+        var suggestedLight = LightLevelDisplay.TryParseFromText(knowledge.LightRequirement);
+        var taboos = CareConstraintExtractor.ExtractTaboos(
+            knowledge.LightRequirement,
+            knowledge.WaterRequirement,
+            knowledge.SoilRequirement,
+            knowledge.CareSummary,
+            knowledge.ExternalCareGuide);
+
+        return CareConstraintExtractor.BuildMismatchWarnings(
+            suggestedLight,
+            draft.ActualLight,
+            taboos,
+            draft.HasRainCover,
+            draft.ActualPlacement,
+            draft.SubstrateType);
+    }
 
     private static SpeciesCandidateItemViewModel MapCandidate(Midnight.EC.Plant.WEB.Models.External.ExternalSpeciesResult c) => new()
     {
@@ -357,7 +451,7 @@ public class PlantController : Controller
     };
 
     [HttpGet]
-    public async Task<IActionResult> Edit(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Edit(Guid id, CancellationToken cancellationToken)
     {
         var plant = await _plantService.GetByIdAsync(id, cancellationToken);
         if (plant == null)
@@ -382,7 +476,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(int id, EditPlantViewModel model, CancellationToken cancellationToken)
+    public async Task<IActionResult> Edit(Guid id, EditPlantViewModel model, CancellationToken cancellationToken)
     {
         if (id != model.Id)
         {
@@ -418,7 +512,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         try
         {
@@ -436,7 +530,7 @@ public class PlantController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> Details(Guid id, CancellationToken cancellationToken)
     {
         var plant = await _plantService.GetByIdAsync(id, cancellationToken);
         if (plant == null)
@@ -452,32 +546,16 @@ public class PlantController : Controller
         var analysesByImage = analyses
             .Where(a => a.ImageId.HasValue)
             .GroupBy(a => a.ImageId!.Value)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.CreatedAt).First());
-        var careRecords = await _careService.GetByPlantIdAsync(id, cancellationToken);
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.CreateDate).First());
         var trend = await _careService.GetTrendAsync(id, 30, cancellationToken);
         var profile = await _profileService.GetByPlantIdAsync(id, cancellationToken);
         var reminders = await _reminderService.GetActiveByPlantIdAsync(id, cancellationToken);
+        var timeline = await _timelineService.GetTimelineAsync(id, 90, cancellationToken);
         var knowledgeVm = MapKnowledge(
             plant.Knowledge,
             plant.Species?.ChineseName ?? plant.Name ?? plant.Species?.ScientificName);
-        var latestAnalysis = analyses.OrderByDescending(a => a.CreatedAt).FirstOrDefault();
+        var latestAnalysis = analyses.OrderByDescending(a => a.CreateDate).FirstOrDefault();
         var defaultKeyword = plant.Species?.ChineseName ?? plant.Name ?? plant.Species?.ScientificName ?? string.Empty;
-
-        if (knowledgeVm != null && knowledgeVm.IsSparse && !string.IsNullOrWhiteSpace(defaultKeyword))
-        {
-            try
-            {
-                await _knowledgeService.RefreshFromExternalAsync(plant.SpeciesId, defaultKeyword.Trim(), cancellationToken);
-                plant = await _plantService.GetByIdAsync(id, cancellationToken) ?? plant;
-                knowledgeVm = MapKnowledge(
-                    plant.Knowledge,
-                    plant.Species?.ChineseName ?? plant.Name ?? plant.Species?.ScientificName);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Auto refresh knowledge failed for plant {PlantId}", id);
-            }
-        }
 
         var model = new PlantDetailViewModel
         {
@@ -505,20 +583,18 @@ public class PlantController : Controller
                     PublicPath = _imageStorageService.GetPublicPath(p.StoragePath),
                     Note = p.Note,
                     IsCover = p.IsCover,
-                    CreatedAt = p.CreatedAt,
+                    CreatedAt = p.CreateDate,
                     LatestAnalysis = photoAnalysis == null ? null : MapAnalysis(photoAnalysis)
                 };
             }).ToList(),
             Analyses = analyses.Select((a, index) => MapAnalysis(a, index == 0)).ToList(),
-            CareRecords = careRecords.Select(r => new PlantCareRecordItemViewModel
+            Timeline = timeline.Select(e => new PlantTimelineItemViewModel
             {
-                Id = r.Id,
-                RecordDate = r.RecordDate,
-                CareType = r.CareType,
-                NumericValue = r.NumericValue,
-                Unit = r.Unit,
-                Note = r.Note,
-                DisplayValue = FormatCareDisplay(r.CareType, r.NumericValue, r.Unit, r.Note)
+                EventType = e.EventType,
+                EventDate = e.EventDate,
+                Title = e.Title,
+                Summary = e.Summary,
+                HealthScore = e.HealthScore
             }).ToList(),
             Trend = MapTrend(trend),
             DaysSinceLastWatering = trend.LastWateringDate.HasValue
@@ -526,10 +602,8 @@ public class PlantController : Controller
                 : null,
             Profile = MapProfile(profile),
             Reminders = reminders.Select(MapReminder).ToList(),
-            NewCareRecord = new CreateCareRecordViewModel(),
             NewPhoto = new CreatePhotoViewModel(),
-            TodayLog = new TodayLogViewModel(),
-            BackfillLog = new TodayLogViewModel { LogDate = DateTime.Today.AddDays(-1) }
+            LogEntry = new TodayLogViewModel { LogDate = DateTime.Today }
         };
 
         return View(model);
@@ -537,7 +611,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SyncKnowledge(int id, [Bind(Prefix = "SyncKnowledge")] SyncKnowledgeViewModel model, CancellationToken cancellationToken)
+    public async Task<IActionResult> SyncKnowledge(Guid id, [Bind(Prefix = "SyncKnowledge")] SyncKnowledgeViewModel model, CancellationToken cancellationToken)
     {
         var plant = await _plantService.GetByIdAsync(id, cancellationToken);
         if (plant == null)
@@ -553,10 +627,11 @@ public class PlantController : Controller
 
         try
         {
-            await _knowledgeService.RefreshFromExternalAsync(plant.SpeciesId, model.SpeciesKeyword.Trim(), cancellationToken);
+            var refresh = await _knowledgeService.RefreshFromExternalAsync(plant.SpeciesId, model.SpeciesKeyword.Trim(), cancellationToken);
+            var envFit = await _knowledgeService.RefreshEnvironmentAdviceAsync(id, cancellationToken);
 
             await _reminderService.SyncRemindersAsync(id, cancellationToken);
-            TempData["Success"] = "已從外部 API（Trefle / iNaturalist / GBIF / Wikipedia / AI）更新植物知識。";
+            ApplySyncKnowledgeFlash(refresh.AiSupplement, refresh.AiFailureReason, envFit);
         }
         catch (Exception ex)
         {
@@ -567,8 +642,49 @@ public class PlantController : Controller
         return RedirectToAction(nameof(Details), new { id });
     }
 
+    private void ApplySyncKnowledgeFlash(
+        Midnight.EC.Plant.WEB.Models.External.AiSupplementOutcome aiSupplement,
+        string? aiFailureReason,
+        Midnight.EC.Plant.WEB.Models.External.EnvironmentFitResult envFit)
+    {
+        switch (aiSupplement)
+        {
+            case Midnight.EC.Plant.WEB.Models.External.AiSupplementOutcome.Applied:
+                TempData["Success"] = "已從外部來源更新照護知識，並以 AI 補足缺漏欄位。";
+                break;
+            case Midnight.EC.Plant.WEB.Models.External.AiSupplementOutcome.AppliedWithRemainingGaps:
+                TempData["Success"] = "已從外部來源更新照護知識。";
+                TempData["Warning"] = "AI 已補足部分欄位，但仍有欄位空缺。";
+                break;
+            case Midnight.EC.Plant.WEB.Models.External.AiSupplementOutcome.ServiceFailed:
+                TempData["Success"] = "已從外部來源更新照護知識。";
+                TempData["Warning"] = string.IsNullOrWhiteSpace(aiFailureReason)
+                    ? "外部同步已完成，但 AI 補足失敗，部分欄位可能未補齊。"
+                    : $"外部同步已完成，但 AI 補足失敗：{aiFailureReason}";
+                break;
+            default:
+                TempData["Success"] = "已從外部 API（Trefle / iNaturalist / GBIF / Wikipedia）更新植物知識。";
+                break;
+        }
+
+        if (envFit.Succeeded)
+        {
+            TempData["Success"] = $"{TempData["Success"]} 已依你的實際環境產出適配建議。";
+        }
+        else if (envFit.SkippedNoEnvironment)
+        {
+            TempData["Flash"] ??= "尚未填寫實際環境；補上後可再同步，AI 才會對照陽台／日照／遮雨／介質分析。";
+        }
+        else if (!string.IsNullOrWhiteSpace(envFit.FailureReason))
+        {
+            TempData["Warning"] = string.IsNullOrWhiteSpace(TempData["Warning"] as string)
+                ? $"物種知識已更新，但「針對實際環境」分析失敗：{envFit.FailureReason}"
+                : $"{TempData["Warning"]}；環境適配分析失敗：{envFit.FailureReason}";
+        }
+    }
+
     [HttpGet]
-    public async Task<IActionResult> EditEnvironment(int id, CancellationToken cancellationToken)
+    public async Task<IActionResult> EditEnvironment(Guid id, CancellationToken cancellationToken)
     {
         var plant = await _plantService.GetByIdAsync(id, cancellationToken);
         if (plant == null)
@@ -577,7 +693,7 @@ public class PlantController : Controller
         }
 
         var profile = await _profileService.GetByPlantIdAsync(id, cancellationToken);
-        var knowledge = plant.SpeciesId > 0
+        var knowledge = plant.SpeciesId != Guid.Empty
             ? await _knowledgeService.GetBySpeciesIdAsync(plant.SpeciesId, cancellationToken)
             : null;
 
@@ -589,7 +705,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> EditEnvironment(int id, PlantProfileViewModel model, CancellationToken cancellationToken)
+    public async Task<IActionResult> EditEnvironment(Guid id, PlantProfileViewModel model, CancellationToken cancellationToken)
     {
         var plant = await _plantService.GetByIdAsync(id, cancellationToken);
         if (plant == null)
@@ -645,20 +761,36 @@ public class PlantController : Controller
             ActualLight = model.ActualLight,
             HasRainCover = model.HasRainCover,
             SubstrateType = model.SubstrateType,
+            SaucerState = model.SaucerState,
             City = model.City,
             OverrideSuggestedLight = existing?.OverrideSuggestedLight,
             OverrideCareTaboosJson = existing?.OverrideCareTaboosJson,
             WateringIntervalDetachedFromWiki = existing?.WateringIntervalDetachedFromWiki ?? false,
-            EnvironmentMismatchAcknowledged = warnings.Count > 0
+            EnvironmentMismatchAcknowledged = warnings.Count > 0,
+            AiEnvironmentAdvice = existing?.AiEnvironmentAdvice
         }, cancellationToken);
 
-        TempData["Success"] = "實際環境已儲存。";
+        var environmentChanged = HasEnvironmentAdviceInputsChanged(existing, model);
+        if (!environmentChanged)
+        {
+            TempData["Success"] = "實際環境已儲存（參數未變更，未重跑 AI 適配建議）。";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        var envFit = await _knowledgeService.RefreshEnvironmentAdviceAsync(id, cancellationToken);
+        TempData["Success"] = envFit.Succeeded
+            ? "實際環境已儲存，並已依環境更新 AI 適配建議。"
+            : envFit.SkippedNoEnvironment
+                ? "實際環境已儲存。"
+                : string.IsNullOrWhiteSpace(envFit.FailureReason)
+                    ? "實際環境已儲存。"
+                    : $"實際環境已儲存，但 AI 適配建議更新失敗：{envFit.FailureReason}";
         return RedirectToAction(nameof(Details), new { id });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SaveProfile(int id, PlantProfileViewModel model, CancellationToken cancellationToken)
+    public async Task<IActionResult> SaveProfile(Guid id, PlantProfileViewModel model, CancellationToken cancellationToken)
     {
         var existing = await _profileService.GetByPlantIdAsync(id, cancellationToken);
         await _profileService.SaveAsync(id, new PlantProfileDto
@@ -674,6 +806,7 @@ public class PlantController : Controller
             ActualLight = existing?.ActualLight,
             HasRainCover = existing?.HasRainCover,
             SubstrateType = existing?.SubstrateType,
+            SaucerState = existing?.SaucerState,
             City = existing?.City,
             OverrideSuggestedLight = existing?.OverrideSuggestedLight,
             OverrideCareTaboosJson = existing?.OverrideCareTaboosJson,
@@ -688,7 +821,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DismissReminder(int id, int reminderId, CancellationToken cancellationToken)
+    public async Task<IActionResult> DismissReminder(Guid id, Guid reminderId, CancellationToken cancellationToken)
     {
         await _reminderService.DismissAsync(reminderId, cancellationToken);
         TempData["Success"] = "提醒已略過。";
@@ -697,7 +830,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UploadPhoto(int id, [Bind(Prefix = "NewPhoto")] CreatePhotoViewModel model, IFormFile? photoFile, CancellationToken cancellationToken)
+    public async Task<IActionResult> UploadPhoto(Guid id, [Bind(Prefix = "NewPhoto")] CreatePhotoViewModel model, IFormFile? photoFile, CancellationToken cancellationToken)
     {
         if (photoFile == null || photoFile.Length == 0)
         {
@@ -721,7 +854,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SetCoverPhoto(int id, int imageId, CancellationToken cancellationToken)
+    public async Task<IActionResult> SetCoverPhoto(Guid id, Guid imageId, CancellationToken cancellationToken)
     {
         await _imageService.SetCoverAsync(id, imageId, cancellationToken);
         TempData["Success"] = "已更新封面照片。";
@@ -730,7 +863,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdatePhotoNote(int id, int imageId, UpdatePhotoNoteViewModel model, CancellationToken cancellationToken)
+    public async Task<IActionResult> UpdatePhotoNote(Guid id, Guid imageId, UpdatePhotoNoteViewModel model, CancellationToken cancellationToken)
     {
         await _imageService.UpdateNoteAsync(imageId, model.Note, cancellationToken);
         TempData["Success"] = "照片備註已更新。";
@@ -739,7 +872,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeletePhoto(int id, int imageId, CancellationToken cancellationToken)
+    public async Task<IActionResult> DeletePhoto(Guid id, Guid imageId, CancellationToken cancellationToken)
     {
         await _imageService.DeleteAsync(imageId, cancellationToken);
         TempData["Success"] = "照片已刪除。";
@@ -747,7 +880,7 @@ public class PlantController : Controller
     }
 
     [HttpPost]
-    public async Task<IActionResult> AnalyzePhoto(int id, int imageId, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> AnalyzePhoto(Guid id, Guid imageId, CancellationToken cancellationToken = default)
     {
         var job = await _analysisService.StartPhotoAnalysisAsync(id, imageId, cancellationToken);
         return AcceptedAtAction(nameof(AnalysisStatus), new { id, jobId = job.Id }, job);
@@ -755,7 +888,7 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateCareRecord(int id, CreateCareRecordViewModel model, CancellationToken cancellationToken)
+    public async Task<IActionResult> CreateCareRecord(Guid id, CreateCareRecordViewModel model, CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
@@ -772,41 +905,71 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SaveTodayLog(
-        int id,
-        [Bind(Prefix = "TodayLog")] TodayLogViewModel model,
-        List<IFormFile>? photos,
-        CancellationToken cancellationToken)
-    {
-        return await SaveLogInternalAsync(id, DateTime.Today, model, photos, stayOnDetails: true, cancellationToken);
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> BackfillLog(
-        int id,
-        [Bind(Prefix = "BackfillLog")] TodayLogViewModel model,
+    public async Task<IActionResult> SaveLogEntry(
+        Guid id,
+        [Bind(Prefix = "LogEntry")] TodayLogViewModel model,
         List<IFormFile>? photos,
         CancellationToken cancellationToken)
     {
         if (model.LogDate is null)
         {
-            TempData["Error"] = "請選擇補記日期。";
+            TempData["Error"] = "請選擇日期。";
             return RedirectToAction(nameof(Details), new { id });
         }
 
         var day = model.LogDate.Value.Date;
-        if (day >= DateTime.Today)
+        if (day > DateTime.Today)
         {
-            TempData["Error"] = "補記只能選今天以前的日期；今天請用上方極簡列。";
+            TempData["Error"] = "日期不能選未來。";
             return RedirectToAction(nameof(Details), new { id });
         }
 
         return await SaveLogInternalAsync(id, day, model, photos, stayOnDetails: true, cancellationToken);
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveTodayLog(
+        Guid id,
+        [Bind(Prefix = "TodayLog")] TodayLogViewModel model,
+        List<IFormFile>? photos,
+        CancellationToken cancellationToken)
+    {
+        model.LogDate ??= DateTime.Today;
+        if (model.LogDate.Value.Date > DateTime.Today)
+        {
+            TempData["Error"] = "日期不能選未來。";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        return await SaveLogInternalAsync(id, model.LogDate.Value.Date, model, photos, stayOnDetails: true, cancellationToken);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BackfillLog(
+        Guid id,
+        [Bind(Prefix = "BackfillLog")] TodayLogViewModel model,
+        List<IFormFile>? photos,
+        CancellationToken cancellationToken)
+    {
+        if (model.LogDate is null)
+        {
+            TempData["Error"] = "請選擇日期。";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        if (model.LogDate.Value.Date > DateTime.Today)
+        {
+            TempData["Error"] = "日期不能選未來。";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        return await SaveLogInternalAsync(id, model.LogDate.Value.Date, model, photos, stayOnDetails: true, cancellationToken);
+    }
+
     private async Task<IActionResult> SaveLogInternalAsync(
-        int id,
+        Guid id,
         DateTime day,
         TodayLogViewModel model,
         List<IFormFile>? photos,
@@ -850,7 +1013,7 @@ public class PlantController : Controller
                 await _reminderService.SyncRemindersAsync(id, cancellationToken);
             }
 
-            TempData["Success"] = day.Date == DateTime.Today ? "今日紀錄已儲存。" : $"已補記 {day:yyyy/MM/dd}。";
+            TempData["Success"] = day.Date == DateTime.Today ? "今日紀錄已儲存。" : $"已記上 {day:yyyy/MM/dd}。";
         }
         catch (Exception ex)
         {
@@ -862,14 +1025,14 @@ public class PlantController : Controller
     }
 
     [HttpPost]
-    public async Task<IActionResult> Analyze(int id, AnalysisScope scope = AnalysisScope.Recent30Days, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Analyze(Guid id, AnalysisScope scope = AnalysisScope.Recent30Days, CancellationToken cancellationToken = default)
     {
         var job = await _analysisService.StartAnalysisAsync(id, null, scope, cancellationToken);
         return AcceptedAtAction(nameof(AnalysisStatus), new { id, jobId = job.Id }, job);
     }
 
     [HttpGet]
-    public async Task<IActionResult> AnalysisStatus(int id, int jobId, CancellationToken cancellationToken)
+    public async Task<IActionResult> AnalysisStatus(Guid id, Guid jobId, CancellationToken cancellationToken)
     {
         var job = await _analysisService.GetJobStatusAsync(jobId, cancellationToken);
         if (job == null || job.PlantId != id)
@@ -886,17 +1049,31 @@ public class PlantController : Controller
         });
     }
 
-    private static PlantAnalysisItemViewModel MapAnalysis(PlantAnalysisDto analysis, bool isExpanded = false) => new()
+    private static PlantAnalysisItemViewModel MapAnalysis(PlantAnalysisDto analysis, bool isExpanded = false)
     {
-        Id = analysis.Id,
-        ImageId = analysis.ImageId,
-        CreatedAt = analysis.CreatedAt,
-        Summary = analysis.Summary,
-        HealthScore = analysis.HealthScore,
-        Confidence = analysis.Confidence,
-        ResultJson = analysis.ResultJson,
-        IsExpanded = isExpanded
-    };
+        string? fertilizerText = null;
+        if (!string.IsNullOrWhiteSpace(analysis.ResultJson))
+        {
+            var parsed = JsonHelper.Deserialize<PlantAnalysisResultDto>(analysis.ResultJson);
+            if (parsed?.FertilizerAdvice != null)
+            {
+                fertilizerText = CareGuideJson.FormatFertilizerRequirement(parsed.FertilizerAdvice);
+            }
+        }
+
+        return new PlantAnalysisItemViewModel
+        {
+            Id = analysis.Id,
+            ImageId = analysis.ImageId,
+            CreatedAt = analysis.CreateDate,
+            Summary = analysis.Summary,
+            HealthScore = analysis.HealthScore,
+            Confidence = analysis.Confidence,
+            ResultJson = analysis.ResultJson,
+            FertilizerAdviceText = fertilizerText,
+            IsExpanded = isExpanded
+        };
+    }
 
     private static PlantKnowledgeViewModel? MapKnowledge(PlantKnowledgeDto? knowledge, string? plantDisplayName = null)
     {
@@ -975,6 +1152,10 @@ public class PlantController : Controller
             var ai = JsonHelper.Deserialize<PlantAnalysisResultDto>(latestResultJson);
             suggestions.AiWateringAdvice = ai?.WateringAdvice;
             suggestions.AiGrowthTrend = ai?.GrowthTrend;
+            if (ai?.FertilizerAdvice != null)
+            {
+                suggestions.AiFertilizerAdvice = CareGuideJson.FormatFertilizerRequirement(ai.FertilizerAdvice);
+            }
         }
 
         return suggestions;
@@ -1057,11 +1238,33 @@ public class PlantController : Controller
             ActualLight = profile.ActualLight,
             HasRainCover = profile.HasRainCover,
             SubstrateType = profile.SubstrateType,
-            City = profile.City
+            SaucerState = profile.SaucerState,
+            City = profile.City,
+            AiEnvironmentAdvice = profile.AiEnvironmentAdvice
         };
 
+    private static bool HasEnvironmentAdviceInputsChanged(PlantProfileDto? existing, PlantProfileViewModel model)
+    {
+        if (existing == null)
+        {
+            return model.ActualPlacement != null
+                || model.ActualLight != null
+                || model.HasRainCover != null
+                || !string.IsNullOrWhiteSpace(model.SubstrateType)
+                || model.SaucerState != null
+                || !string.IsNullOrWhiteSpace(model.City);
+        }
+
+        return existing.ActualPlacement != model.ActualPlacement
+            || existing.ActualLight != model.ActualLight
+            || existing.HasRainCover != model.HasRainCover
+            || !string.Equals(existing.SubstrateType?.Trim(), model.SubstrateType?.Trim(), StringComparison.Ordinal)
+            || existing.SaucerState != model.SaucerState
+            || !string.Equals(existing.City?.Trim(), model.City?.Trim(), StringComparison.Ordinal);
+    }
+
     private static PlantProfileViewModel MapEnvironmentForm(
-        int plantId,
+        Guid plantId,
         string displayName,
         PlantProfileDto? profile,
         PlantKnowledgeDto? knowledge)
@@ -1087,6 +1290,7 @@ public class PlantController : Controller
             profile.ActualLight == null ||
             profile.HasRainCover == null ||
             string.IsNullOrWhiteSpace(profile.SubstrateType) ||
+            profile.SaucerState == null ||
             string.IsNullOrWhiteSpace(profile.City);
         return model;
     }

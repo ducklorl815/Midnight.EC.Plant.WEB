@@ -1,37 +1,37 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Midnight.EC.Plant.WEB.Models.AI;
 using Midnight.EC.Plant.WEB.Models.DTOs;
-using Midnight.EC.Plant.WEB.Models.Entities;
+using Midnight.EC.Plant.WEB.Models.Models;
 using Midnight.EC.Plant.WEB.Models.Enums;
 using Midnight.EC.Plant.WEB.Models.Extensions;
-using Midnight.EC.Plant.WEB.Models.Repositories;
+using Midnight.EC.Plant.WEB.Models.Respository;
 using Midnight.EC.Plant.WEB.Services.AI;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Utility.Json;
 
 namespace Midnight.EC.Plant.WEB.Services.PlantAnalysis;
 
-public class PlantAnalysisService : IPlantAnalysisService
+public class PlantAnalysisService
 {
-    private readonly IPlantAnalysisRepository _analysisRepository;
-    private readonly IPlantAnalysisJobRepository _jobRepository;
-    private readonly IPlantRepository _plantRepository;
-    private readonly IPlantDiaryRepository _diaryRepository;
-    private readonly IPlantImageRepository _imageRepository;
-    private readonly IPlantSourceRepository _sourceRepository;
-    private readonly IPlantCareRecordRepository _careRepository;
-    private readonly IPlantProfileRepository _profileRepository;
+    private readonly PlantAnalysisRespo _analysisRepository;
+    private readonly PlantAnalysisJobRespo _jobRepository;
+    private readonly PlantRespo _plantRepository;
+    private readonly PlantDiaryRespo _diaryRepository;
+    private readonly PlantImageRespo _imageRepository;
+    private readonly PlantSourceRespo _sourceRepository;
+    private readonly PlantCareRecordRespo _careRepository;
+    private readonly PlantProfileRespo _profileRepository;
     private readonly ILogger<PlantAnalysisService> _logger;
 
     public PlantAnalysisService(
-        IPlantAnalysisRepository analysisRepository,
-        IPlantAnalysisJobRepository jobRepository,
-        IPlantRepository plantRepository,
-        IPlantDiaryRepository diaryRepository,
-        IPlantImageRepository imageRepository,
-        IPlantSourceRepository sourceRepository,
-        IPlantCareRecordRepository careRepository,
-        IPlantProfileRepository profileRepository,
+        PlantAnalysisRespo analysisRepository,
+        PlantAnalysisJobRespo jobRepository,
+        PlantRespo plantRepository,
+        PlantDiaryRespo diaryRepository,
+        PlantImageRespo imageRepository,
+        PlantSourceRespo sourceRepository,
+        PlantCareRecordRespo careRepository,
+        PlantProfileRespo profileRepository,
         ILogger<PlantAnalysisService> logger)
     {
         _analysisRepository = analysisRepository;
@@ -45,18 +45,18 @@ public class PlantAnalysisService : IPlantAnalysisService
         _logger = logger;
     }
 
-    public async Task<List<PlantAnalysisDto>> GetByPlantIdAsync(int plantId, CancellationToken cancellationToken = default)
+    public async Task<List<PlantAnalysisDto>> GetByPlantIdAsync(Guid plantId, CancellationToken cancellationToken = default)
     {
         var analyses = await _analysisRepository.GetByPlantIdAsync(plantId, cancellationToken);
         return analyses.Select(a => a.ToDto()).ToList();
     }
 
-    public async Task<PlantAnalysisJobDto> StartAnalysisAsync(int plantId, int? diaryId, AnalysisScope scope, CancellationToken cancellationToken = default)
+    public async Task<PlantAnalysisJobDto> StartAnalysisAsync(Guid plantId, Guid? diaryId, AnalysisScope scope, CancellationToken cancellationToken = default)
     {
         var plant = await _plantRepository.GetByIdAsync(plantId, cancellationToken)
             ?? throw new InvalidOperationException("找不到植物。");
 
-        var job = new PlantAnalysisJob
+        var job = new PlantAnalysisJobModel
         {
             PlantId = plant.Id,
             DiaryId = diaryId,
@@ -65,19 +65,17 @@ public class PlantAnalysisService : IPlantAnalysisService
             CreatedAt = DateTime.UtcNow
         };
 
-        await _jobRepository.AddAsync(job, cancellationToken);
-        await _jobRepository.SaveChangesAsync(cancellationToken);
-
+        await _jobRepository.InsertAsync(job, cancellationToken);
         _logger.LogInformation("Created analysis job {JobId} for plant {PlantId}", job.Id, plantId);
         return job.ToDto();
     }
 
-    public async Task<PlantAnalysisJobDto> StartPhotoAnalysisAsync(int plantId, int imageId, CancellationToken cancellationToken = default)
+    public async Task<PlantAnalysisJobDto> StartPhotoAnalysisAsync(Guid plantId, Guid imageId, CancellationToken cancellationToken = default)
     {
         _ = await _plantRepository.GetByIdAsync(plantId, cancellationToken)
             ?? throw new InvalidOperationException("找不到植物。");
 
-        var job = new PlantAnalysisJob
+        var job = new PlantAnalysisJobModel
         {
             PlantId = plantId,
             ImageId = imageId,
@@ -86,20 +84,18 @@ public class PlantAnalysisService : IPlantAnalysisService
             CreatedAt = DateTime.UtcNow
         };
 
-        await _jobRepository.AddAsync(job, cancellationToken);
-        await _jobRepository.SaveChangesAsync(cancellationToken);
-
+        await _jobRepository.InsertAsync(job, cancellationToken);
         _logger.LogInformation("Created photo analysis job {JobId} for plant {PlantId} image {ImageId}", job.Id, plantId, imageId);
         return job.ToDto();
     }
 
-    public async Task<PlantAnalysisJobDto?> GetJobStatusAsync(int jobId, CancellationToken cancellationToken = default)
+    public async Task<PlantAnalysisJobDto?> GetJobStatusAsync(Guid jobId, CancellationToken cancellationToken = default)
     {
         var job = await _jobRepository.GetByIdAsync(jobId, cancellationToken);
         return job?.ToDto();
     }
 
-    public async Task ProcessJobAsync(int jobId, IAIAgentService aiAgentService, CancellationToken cancellationToken = default)
+    public async Task ProcessJobAsync(Guid jobId, IAIAgentService aiAgentService, CancellationToken cancellationToken = default)
     {
         var job = await _jobRepository.GetByIdAsync(jobId, cancellationToken)
             ?? throw new InvalidOperationException("找不到分析工作。");
@@ -112,20 +108,18 @@ public class PlantAnalysisService : IPlantAnalysisService
         job.Status = AnalysisJobStatus.Processing;
         job.StartedAt = DateTime.UtcNow;
         await _jobRepository.UpdateAsync(job, cancellationToken);
-        await _jobRepository.SaveChangesAsync(cancellationToken);
-
         try
         {
             var context = await BuildContextAsync(job, cancellationToken);
             var result = await aiAgentService.AnalyzePlantAsync(context, cancellationToken);
             var resultJson = JsonHelper.Serialize(result);
 
-            var analysis = new Midnight.EC.Plant.WEB.Models.Entities.PlantAnalysis
+            var analysis = new Midnight.EC.Plant.WEB.Models.Models.PlantAnalysisModel
             {
-                PlantId = job.PlantId,
-                DiaryId = job.DiaryId,
-                ImageId = job.ImageId,
-                AnalysisType = job.ImageId.HasValue ? AnalysisType.General : AnalysisType.General,
+                PlantId = job.PlantID,
+                DiaryId = job.DiaryID,
+                ImageId = job.ImageID,
+                AnalysisType = job.ImageID.HasValue ? AnalysisType.General : AnalysisType.General,
                 AnalysisScope = job.AnalysisScope,
                 ModelName = "OpenAI",
                 PromptVersion = OpenAIPlantAgentService.PromptVersion,
@@ -137,14 +131,11 @@ public class PlantAnalysisService : IPlantAnalysisService
                 CreatedAt = DateTime.UtcNow
             };
 
-            await _analysisRepository.AddAsync(analysis, cancellationToken);
-            await _analysisRepository.SaveChangesAsync(cancellationToken);
-
-            job.AnalysisId = analysis.Id;
+            await _analysisRepository.InsertAsync(analysis, cancellationToken);
+            job.AnalysisID = analysis.Id;
             job.Status = AnalysisJobStatus.Completed;
             job.CompletedAt = DateTime.UtcNow;
             await _jobRepository.UpdateAsync(job, cancellationToken);
-            await _jobRepository.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -153,14 +144,13 @@ public class PlantAnalysisService : IPlantAnalysisService
             job.CompletedAt = DateTime.UtcNow;
             job.RetryCount += 1;
             await _jobRepository.UpdateAsync(job, cancellationToken);
-            await _jobRepository.SaveChangesAsync(cancellationToken);
             _logger.LogError(ex, "Analysis job {JobId} failed", jobId);
         }
     }
 
-    private async Task<PlantAnalysisContext> BuildContextAsync(PlantAnalysisJob job, CancellationToken cancellationToken)
+    private async Task<PlantAnalysisContext> BuildContextAsync(PlantAnalysisJobModel job, CancellationToken cancellationToken)
     {
-        var plant = await _plantRepository.GetByIdWithDetailsAsync(job.PlantId, cancellationToken)
+        var plant = await _plantRepository.GetByIdWithDetailsAsync(job.PlantID, cancellationToken)
             ?? throw new InvalidOperationException("找不到植物。");
 
         var since = job.AnalysisScope switch
@@ -172,26 +162,26 @@ public class PlantAnalysisService : IPlantAnalysisService
             _ => DateTime.UtcNow.AddYears(-10)
         };
 
-        PlantImage? focusImage = null;
-        if (job.ImageId.HasValue)
+        PlantImageModel? focusImage = null;
+        if (job.ImageID.HasValue)
         {
-            focusImage = await _imageRepository.GetByIdAsync(job.ImageId.Value, cancellationToken);
+            focusImage = await _imageRepository.GetByIdAsync(job.ImageID.Value, cancellationToken);
         }
 
         var diaries = job.AnalysisScope == AnalysisScope.PhotoSnapshot
             ? []
-            : await _diaryRepository.GetRecentByPlantIdAsync(job.PlantId, since, cancellationToken);
-        if (job.DiaryId.HasValue)
+            : await _diaryRepository.GetRecentByPlantIdAsync(job.PlantID, since, cancellationToken);
+        if (job.DiaryID.HasValue)
         {
-            diaries = diaries.Where(d => d.Id == job.DiaryId.Value).ToList();
+            diaries = diaries.Where(d => d.Id == job.DiaryID.Value).ToList();
         }
 
-        var plantImages = await _imageRepository.GetByPlantIdAsync(job.PlantId, cancellationToken);
+        var plantImages = await _imageRepository.GetByPlantIdAsync(job.PlantID, cancellationToken);
         var images = focusImage != null ? [focusImage] : plantImages;
-        var previousAnalyses = await _analysisRepository.GetByPlantIdAsync(job.PlantId, cancellationToken);
-        var sources = await _sourceRepository.GetBySpeciesIdAsync(plant.SpeciesId, cancellationToken);
-        var careRecords = await _careRepository.GetRecentByPlantIdAsync(job.PlantId, since, cancellationToken);
-        var profile = await _profileRepository.GetByPlantIdAsync(job.PlantId, cancellationToken);
+        var previousAnalyses = await _analysisRepository.GetByPlantIdAsync(job.PlantID, cancellationToken);
+        var sources = await _sourceRepository.GetBySpeciesIdAsync(plant.SpeciesID, cancellationToken);
+        var careRecords = await _careRepository.GetRecentByPlantIdAsync(job.PlantID, since, cancellationToken);
+        var profile = await _profileRepository.GetByPlantIdAsync(job.PlantID, cancellationToken);
 
         return new PlantAnalysisContext
         {
@@ -200,10 +190,14 @@ public class PlantAnalysisService : IPlantAnalysisService
             Diaries = diaries.Select(d => d.ToDto()).ToList(),
             Images = images.Select(i => i.ToDto()).ToList(),
             PreviousAnalyses = previousAnalyses.Select(a => a.ToDto()).ToList(),
-            Sources = sources
-                .SelectMany(s => s.Contents
-                    .Where(c => c.Status == SourceContentStatus.Completed)
-                    .Select(c => c.ToDto(s)))
+            Sources = (await Task.WhenAll(sources.Select(async s =>
+                {
+                    var contents = await _sourceRepository.GetContentsBySourceIdAsync(s.Id, cancellationToken);
+                    return contents
+                        .Where(c => c.Status == SourceContentStatus.Completed)
+                        .Select(c => c.ToDto(s));
+                })))
+                .SelectMany(x => x)
                 .ToList(),
             CareRecords = careRecords.Select(r => r.ToDto()).ToList(),
             Profile = profile?.ToDto(),

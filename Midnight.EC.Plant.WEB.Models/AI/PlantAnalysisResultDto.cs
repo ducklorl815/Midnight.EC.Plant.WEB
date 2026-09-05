@@ -1,3 +1,5 @@
+using Midnight.EC.Plant.WEB.Models.External;
+
 namespace Midnight.EC.Plant.WEB.Models.AI;
 
 public class PlantAnalysisResultDto
@@ -16,6 +18,8 @@ public class PlantAnalysisResultDto
     public List<string> Alerts { get; set; } = [];
     public decimal Confidence { get; set; }
     public bool NeedsHumanReview { get; set; }
+    /// <summary>施肥／水肥建議（分析結果）</summary>
+    public FertilizerRecipeDto? FertilizerAdvice { get; set; }
 }
 
 public class PlantCitationResultDto

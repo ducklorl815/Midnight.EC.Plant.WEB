@@ -1,0 +1,27 @@
+@using Midnight.EC.Plant.WEB.Models.Enums
+@model Midnight.EC.Plant.WEB.Models.DTOs.PageComposerModuleDto
+
+@switch (Model.Type)
+{
+    case PageModuleType.Banner:
+        @await Html.PartialAsync("Modules/_Banner", Model)
+        break;
+    case PageModuleType.LeftImageRightText:
+        @await Html.PartialAsync("Modules/_LeftImageRightText", Model)
+        break;
+    case PageModuleType.RightImageLeftText:
+        @await Html.PartialAsync("Modules/_RightImageLeftText", Model)
+        break;
+    case PageModuleType.MultiImageMultiText:
+        @await Html.PartialAsync("Modules/_MultiImageMultiText", Model)
+        break;
+    case PageModuleType.MultiImageStyle:
+        @await Html.PartialAsync("Modules/_MultiImageStyle", Model)
+        break;
+    case PageModuleType.PlantDetailWallCarousel:
+        @await Html.PartialAsync("Modules/_PlantDetailWallCarousel", Model)
+        break;
+    case PageModuleType.NotificationReminders:
+        @await Html.PartialAsync("Modules/_NotificationReminders", Model)
+        break;
+}

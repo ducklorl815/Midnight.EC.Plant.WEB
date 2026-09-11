@@ -11,6 +11,8 @@ public class ExternalSpeciesResult
     public string? Family { get; set; }
     public string? TaxonId { get; set; }
     public string? ImageUrl { get; set; }
+    /// <summary>一句辨識說明（找種候選用）。</summary>
+    public string? IdentificationHint { get; set; }
     public string SourceType { get; set; } = string.Empty;
     public string SourceId { get; set; } = string.Empty;
     public string Provider { get; set; } = string.Empty;

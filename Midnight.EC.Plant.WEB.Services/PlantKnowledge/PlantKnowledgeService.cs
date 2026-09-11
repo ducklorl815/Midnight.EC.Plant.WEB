@@ -17,7 +17,7 @@ public class PlantKnowledgeService
     private readonly PlantKnowledgeRespo _knowledgeRepository;
     private readonly PlantRespo _plantRepository;
     private readonly PlantProfileRespo _profileRepository;
-    private readonly IExternalPlantApiService _externalPlantApiService;
+    private readonly IOpenAISpeciesFinderService _speciesFinder;
     private readonly ICareKnowledgeSynthesisService _careSynthesisService;
     private readonly PlantProfileService _profileService;
     private readonly ILogger<PlantKnowledgeService> _logger;
@@ -27,7 +27,7 @@ public class PlantKnowledgeService
         PlantKnowledgeRespo knowledgeRepository,
         PlantRespo plantRepository,
         PlantProfileRespo profileRepository,
-        IExternalPlantApiService externalPlantApiService,
+        IOpenAISpeciesFinderService speciesFinder,
         ICareKnowledgeSynthesisService careSynthesisService,
         PlantProfileService profileService,
         ILogger<PlantKnowledgeService> logger)
@@ -36,7 +36,7 @@ public class PlantKnowledgeService
         _knowledgeRepository = knowledgeRepository;
         _plantRepository = plantRepository;
         _profileRepository = profileRepository;
-        _externalPlantApiService = externalPlantApiService;
+        _speciesFinder = speciesFinder;
         _careSynthesisService = careSynthesisService;
         _profileService = profileService;
         _logger = logger;
@@ -69,7 +69,7 @@ public class PlantKnowledgeService
             ?? await _knowledgeRepository.GetBySpeciesIdAsync(plant.SpeciesID, cancellationToken);
         if (knowledgeEntity == null)
         {
-            return EnvironmentFitResult.Failed("尚無物種照護知識，請先同步外部來源。");
+            return EnvironmentFitResult.Failed("尚無物種照護知識，請先重新產生照護知識。");
         }
 
         var profile = await _profileRepository.GetByPlantIdAsync(plantId, cancellationToken);
@@ -157,17 +157,16 @@ public class PlantKnowledgeService
         var keyword = speciesKeyword?.Trim() ?? string.Empty;
         if (identificationImage != null)
         {
-            var identified = await _externalPlantApiService.IdentifyFromImageAsync(
+            var candidates = await _speciesFinder.FindByImageAsync(
                 identificationImage,
                 imageFileName ?? "plant.jpg",
+                string.IsNullOrWhiteSpace(keyword) ? null : keyword,
                 cancellationToken);
-            if (identified != null)
+            var top = candidates.FirstOrDefault();
+            if (top != null)
             {
-                keyword = identified.ScientificName;
-                _logger.LogInformation(
-                    "Identified plant as {ScientificName} (confidence {Confidence:P0})",
-                    identified.ScientificName,
-                    identified.Confidence);
+                keyword = top.ScientificName;
+                _logger.LogInformation("Identified plant as {ScientificName} via OpenAI", top.ScientificName);
             }
             else if (string.IsNullOrWhiteSpace(keyword))
             {
@@ -192,80 +191,85 @@ public class PlantKnowledgeService
         var species = await _speciesRepository.GetByIdAsync(speciesId, cancellationToken)
             ?? throw new InvalidOperationException("找不到植物物種。");
 
-        var external = await _externalPlantApiService.SearchSpeciesAsync(searchKeyword, cancellationToken)
-            ?? throw new InvalidOperationException("無法從外部 API 取得植物知識，請嘗試調整搜尋關鍵字。");
+        var scientificName = !string.IsNullOrWhiteSpace(species.ScientificName)
+            && !string.Equals(species.ScientificName, "Pending", StringComparison.OrdinalIgnoreCase)
+            && !species.ScientificName.StartsWith("Pending-", StringComparison.OrdinalIgnoreCase)
+            ? species.ScientificName.Trim()
+            : searchKeyword.Trim();
 
-        if (external.Knowledge == null)
+        var trustedChinese = CareGuideJson.TrustedChineseName(
+            displayKeyword,
+            species.ChineseName);
+
+        // 產品主路徑：不再打外部植物 API，直接以 OpenAI 強制重寫照護知識
+        var seedKnowledge = new ExternalKnowledgeResult
         {
-            throw new InvalidOperationException("外部 API 未回傳可用知識資料。");
-        }
+            Provider = "none"
+        };
 
         var synthesis = await _careSynthesisService.SynthesizeAsync(
-            displayKeyword ?? searchKeyword,
-            external.Species?.ScientificName ?? species.ScientificName,
-            external.Knowledge,
+            trustedChinese ?? displayKeyword ?? searchKeyword,
+            scientificName,
+            seedKnowledge,
             cancellationToken,
             forceRefreshGuide: true);
-        var aiCareGuide = synthesis.Partial?.ExternalCareGuide;
-        if (synthesis.Partial != null)
+
+        if (synthesis.Status == CareSynthesisAttemptStatus.ServiceFailed || synthesis.Partial == null)
         {
-            external.Knowledge = MergeExternalWithPartial(external.Knowledge, synthesis.Partial);
-            aiCareGuide ??= external.Knowledge.ExternalCareGuide;
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(synthesis.FailureReason)
+                    ? "OpenAI 產生照護知識失敗。"
+                    : synthesis.FailureReason);
         }
 
-        if (external.Species != null && !string.IsNullOrWhiteSpace(displayKeyword) &&
-            displayKeyword.Any(c => c >= 0x4E00 && c <= 0x9FFF))
+        var externalKnowledge = MergeExternalWithPartial(seedKnowledge, synthesis.Partial);
+        var aiCareGuide = synthesis.Partial.ExternalCareGuide ?? externalKnowledge.ExternalCareGuide;
+
+        if (!string.IsNullOrWhiteSpace(trustedChinese))
         {
-            external.Species.ChineseName ??= displayKeyword;
+            await EnrichSpeciesMetadataAsync(species, new ExternalSpeciesResult
+            {
+                ScientificName = scientificName,
+                ChineseName = trustedChinese,
+                Genus = species.Genus,
+                Family = species.Family
+            }, cancellationToken);
         }
 
-        await EnrichSpeciesMetadataAsync(species, external.Species, cancellationToken);
-
-        var displayName = displayKeyword
+        var displayName = trustedChinese
             ?? species.ChineseName
             ?? species.CommonName
             ?? searchKeyword;
 
         var existing = await _knowledgeRepository.GetBySpeciesIdAsync(speciesId, cancellationToken);
         var now = DateTime.UtcNow;
-        var careTemplate = GenusCareTemplateProvider.TryGetFromKeyword(displayKeyword ?? searchKeyword)
-            ?? GenusCareTemplateProvider.TryGet(species.Genus, species.Family);
 
         Midnight.EC.Plant.WEB.Models.Models.PlantKnowledgeModel saved;
         if (existing == null)
         {
-            var knowledge = MapNewKnowledge(speciesId, external.Knowledge, now);
-            if (careTemplate != null)
-            {
-                MergePartial(knowledge, careTemplate);
-            }
-
+            var knowledge = MapNewKnowledge(speciesId, externalKnowledge, now);
             ApplyExternalCareGuide(
                 knowledge,
                 displayName,
-                external.Species?.ScientificName ?? species.ScientificName,
-                CareGuideJson.TrustedChineseName(displayKeyword, species.ChineseName ?? external.Species?.ChineseName),
+                scientificName,
+                trustedChinese,
                 aiCareGuide);
             ApplyStructuredConstraints(knowledge);
+            // 強制覆蓋：Merge 後再寫入 AI 全量
+            OverwriteFromPartial(knowledge, synthesis.Partial);
 
             await _knowledgeRepository.InsertAsync(knowledge, cancellationToken);
-            _logger.LogInformation("Synced plant knowledge for species {SpeciesId} from {Provider}", speciesId, external.Knowledge.Provider);
+            _logger.LogInformation("AI-wrote plant knowledge for species {SpeciesId}", speciesId);
             saved = knowledge;
         }
         else
         {
-            MergeKnowledge(existing, external.Knowledge);
-
-            if (careTemplate != null)
-            {
-                MergePartial(existing, careTemplate);
-            }
-
+            OverwriteFromPartial(existing, synthesis.Partial);
             ApplyExternalCareGuide(
                 existing,
                 displayName,
-                external.Species?.ScientificName ?? species.ScientificName,
-                CareGuideJson.TrustedChineseName(displayKeyword, species.ChineseName ?? external.Species?.ChineseName),
+                scientificName,
+                trustedChinese,
                 aiCareGuide);
             ApplyStructuredConstraints(existing);
 
@@ -273,7 +277,7 @@ public class PlantKnowledgeService
             existing.SourceUpdatedAt = now;
             existing.ModifyDate = now;
             await _knowledgeRepository.UpdateAsync(existing, cancellationToken);
-            _logger.LogInformation("Refreshed plant knowledge for species {SpeciesId} from {Provider}", speciesId, external.Knowledge.Provider);
+            _logger.LogInformation("AI-refreshed plant knowledge for species {SpeciesId}", speciesId);
             saved = existing;
         }
 
@@ -283,6 +287,34 @@ public class PlantKnowledgeService
             AiSupplement = ResolveAiSupplementOutcome(synthesis.Status, saved),
             AiFailureReason = synthesis.FailureReason
         };
+    }
+
+    private static void OverwriteFromPartial(
+        Midnight.EC.Plant.WEB.Models.Models.PlantKnowledgeModel knowledge,
+        ExternalKnowledgePartial partial)
+    {
+        if (!string.IsNullOrWhiteSpace(partial.LightRequirement))
+            knowledge.LightRequirement = partial.LightRequirement;
+        if (!string.IsNullOrWhiteSpace(partial.WaterRequirement))
+            knowledge.WaterRequirement = partial.WaterRequirement;
+        if (!string.IsNullOrWhiteSpace(partial.HumidityRequirement))
+            knowledge.HumidityRequirement = partial.HumidityRequirement;
+        if (partial.TemperatureMin.HasValue)
+            knowledge.TemperatureMin = partial.TemperatureMin;
+        if (partial.TemperatureMax.HasValue)
+            knowledge.TemperatureMax = partial.TemperatureMax;
+        if (!string.IsNullOrWhiteSpace(partial.SoilRequirement))
+            knowledge.SoilRequirement = partial.SoilRequirement;
+        if (!string.IsNullOrWhiteSpace(partial.FertilizerRequirement))
+            knowledge.FertilizerRequirement = partial.FertilizerRequirement;
+        if (!string.IsNullOrWhiteSpace(partial.GrowthSeason))
+            knowledge.GrowthSeason = partial.GrowthSeason;
+        if (!string.IsNullOrWhiteSpace(partial.CareSummary))
+            knowledge.CareSummary = partial.CareSummary;
+        if (partial.SuggestedLight.HasValue)
+            knowledge.SuggestedLight = partial.SuggestedLight;
+        if (!string.IsNullOrWhiteSpace(partial.ExternalCareGuide))
+            knowledge.ExternalCareGuide = partial.ExternalCareGuide;
     }
 
     private static AiSupplementOutcome ResolveAiSupplementOutcome(
@@ -305,29 +337,36 @@ public class PlantKnowledgeService
         string? trustedChineseName,
         string? aiCareGuide)
     {
-        // 同步時若 AI 產出結構化說明，一律覆蓋（舊長文／舊 JSON 都重產）
         if (!string.IsNullOrWhiteSpace(aiCareGuide))
         {
             var guide = CareGuideJson.TryParseSpeciesGuide(aiCareGuide);
             if (guide != null)
             {
-                // 學名以外部／物種為準；中文名只信任使用者或資料庫，丟棄 AI 自造俗名
                 guide.ScientificName = !string.IsNullOrWhiteSpace(scientificName)
                     ? scientificName.Trim()
                     : guide.ScientificName;
                 guide.ChineseName = trustedChineseName;
 
-                // 摘要若以錯誤中文名開頭，改以學名起述（避免「珍珠樹是…」）
-                if (!string.IsNullOrWhiteSpace(guide.Summary) && !string.IsNullOrWhiteSpace(guide.ScientificName))
+                var idMod = guide.FindModule(CareGuideModuleIds.Identification);
+                if (idMod != null && !string.IsNullOrWhiteSpace(idMod.Content) && !string.IsNullOrWhiteSpace(guide.ScientificName))
                 {
-                    guide.Summary = RewriteSummaryLead(guide.Summary, guide.ScientificName, trustedChineseName);
+                    idMod.Content = RewriteSummaryLead(idMod.Content, guide.ScientificName, trustedChineseName);
                 }
 
-                knowledge.ExternalCareGuide = CareGuideJson.Serialize(guide);
-                var fertText = CareGuideJson.FormatFertilizerRequirement(guide.Fertilizer);
+                var stored = CareGuideJson.ForStorage(guide);
+                knowledge.ExternalCareGuide = CareGuideJson.Serialize(stored);
+                CareGuideJson.ProjectQuickFactsToKnowledge(stored.QuickFacts, knowledge);
+
+                var fertText = CareGuideJson.FormatFertilizerRequirement(stored.FertilizerRecipe);
                 if (!string.IsNullOrWhiteSpace(fertText))
                 {
                     knowledge.FertilizerRequirement = fertText;
+                }
+
+                var intro = stored.GetWallIntro();
+                if (!string.IsNullOrWhiteSpace(intro))
+                {
+                    knowledge.CareSummary = intro.Length > 400 ? intro[..400] + "…" : intro;
                 }
 
                 return;
@@ -347,15 +386,9 @@ public class PlantKnowledgeService
                     ? scientificName.Trim()
                     : existingGuide.ScientificName;
                 existingGuide.ChineseName = trustedChineseName;
-                if (!string.IsNullOrWhiteSpace(existingGuide.Summary) && !string.IsNullOrWhiteSpace(existingGuide.ScientificName))
-                {
-                    existingGuide.Summary = RewriteSummaryLead(
-                        existingGuide.Summary,
-                        existingGuide.ScientificName,
-                        trustedChineseName);
-                }
-
-                knowledge.ExternalCareGuide = CareGuideJson.Serialize(existingGuide);
+                var stored = CareGuideJson.ForStorage(existingGuide);
+                knowledge.ExternalCareGuide = CareGuideJson.Serialize(stored);
+                CareGuideJson.ProjectQuickFactsToKnowledge(stored.QuickFacts, knowledge);
                 return;
             }
 

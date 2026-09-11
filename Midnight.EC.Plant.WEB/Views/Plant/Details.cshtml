@@ -308,7 +308,7 @@
         <section class="panel h-100">
             <div class="panel-header">
                 <strong>物種照護知識</strong>
-                <span class="badge-soft">外部來源</span>
+                <span class="badge-soft">AI 照護指南</span>
             </div>
             <div class="panel-body">
                 @{
@@ -324,7 +324,7 @@
                 {
                     <div class="alert alert-danger knowledge-gaps mb-3" role="status">
                         <div class="fw-semibold mb-1">知識欄位未齊</div>
-                        <p class="small mb-2 mb-md-2">下列欄位仍空，可於右側「同步外部 API」補齊：</p>
+                        <p class="small mb-2 mb-md-2">下列欄位仍空，可於右側「重新產生照護知識」補齊：</p>
                         <ul class="knowledge-gap-list mb-0">
                             @foreach (var field in missing)
                             {
@@ -335,24 +335,27 @@
                 }
 
                 <div class="care-facts mb-3">
+                    @{
+                        var qf = speciesGuide?.QuickFacts;
+                        var speciesInterval = Model.CareSuggestions.SuggestedWateringIntervalDays
+                            ?? (qf != null ? null : suggestedDays);
+                        // Prefer quickFacts interval projection already in knowledge
+                        if (suggestedDays.HasValue) { speciesInterval = suggestedDays; }
+                    }
                     <div class="@(Miss("建議日照") ? "care-fact-missing" : null)">
-                        <span>建議日照</span>
+                        <span>物種日照</span>
                         @(Model.Knowledge?.SuggestedLight.HasValue == true
                             ? Model.Knowledge.SuggestedLightLabel
                             : "未設定")
                     </div>
-                    <div class="@(Miss("光照") ? "care-fact-missing" : null)">
-                        <span>光照</span>
-                        @(string.IsNullOrWhiteSpace(Model.Knowledge?.LightRequirement) ? "未設定" : Model.Knowledge!.LightRequirement)
-                    </div>
-                    @if (suggestedDays.HasValue)
+                    @if (speciesInterval.HasValue)
                     {
-                        <div><span>建議澆水</span>每 @suggestedDays 天</div>
+                        <div><span>物種參考澆水</span>約每 @speciesInterval 天（僅參考）</div>
                     }
                     else
                     {
                         <div class="@(Miss("澆水") ? "care-fact-missing" : null)">
-                            <span>澆水</span>
+                            <span>澆水策略</span>
                             @(string.IsNullOrWhiteSpace(Model.Knowledge?.WaterRequirement) ? "未設定" : Model.Knowledge!.WaterRequirement)
                         </div>
                     }
@@ -364,42 +367,43 @@
                         <span>溫度</span>
                         @(string.IsNullOrWhiteSpace(Model.Knowledge?.TemperatureRange) ? "未設定" : Model.Knowledge!.TemperatureRange)
                     </div>
-                    <div class="@(Miss("土壤") ? "care-fact-missing" : null)">
-                        <span>土壤</span>
-                        @(string.IsNullOrWhiteSpace(Model.Knowledge?.SoilRequirement) ? "未設定" : Model.Knowledge!.SoilRequirement)
-                    </div>
-                    <div class="@(Miss("施肥") ? "care-fact-missing" : null)">
-                        <span>施肥</span>
-                        @(string.IsNullOrWhiteSpace(Model.Knowledge?.FertilizerRequirement) ? "未設定" : Model.Knowledge!.FertilizerRequirement)
-                    </div>
                     <div class="@(Miss("生長季") ? "care-fact-missing" : null)">
                         <span>生長季</span>
                         @(string.IsNullOrWhiteSpace(Model.Knowledge?.GrowthSeason) ? "未設定" : Model.Knowledge!.GrowthSeason)
                     </div>
                     @if (myDays.HasValue)
                     {
-                        <div><span>我的週期</span>每 @myDays 天</div>
+                        <div><span>我的澆水周期</span>每 @myDays 天</div>
                     }
                 </div>
 
                 @if (Miss("結構化照護指南"))
                 {
-                    <div class="care-fact-missing rounded px-3 py-2 mb-3">結構化照護指南：未設定（同步後應出現摘要與施肥配方）</div>
+                    <div class="care-fact-missing rounded px-3 py-2 mb-3">照護知識模組：未設定（請重新產生照護知識）</div>
                 }
                 else if (speciesGuide != null || !string.IsNullOrWhiteSpace(Model.Knowledge?.ExternalCareGuide))
                 {
+                    ViewBag.PlantProfile = Model.Profile;
                     @await Html.PartialAsync("_SpeciesCareGuide", speciesGuide)
                 }
                 else if (Model.Knowledge != null && !Model.Knowledge.IsSparse)
                 {
-                    <p class="text-muted small">已有部分欄位，請同步以產生結構化照護說明。</p>
+                    <p class="text-muted small">已有部分欄位，請重新產生照護知識。</p>
                 }
                 else
                 {
-                    <p class="text-muted mb-3">尚無官方說明，可在下方進階區同步外部資料。</p>
+                    <p class="text-muted mb-3">尚無照護說明，可在右側「重新產生照護知識」。</p>
                 }
 
-                @await Html.PartialAsync("_EnvironmentAdvice", Model.Profile)
+                @* 環境適配若未排進模組順序，仍顯示一次（避免版面關掉我的環境後完全消失可接受；有排進則 _SpeciesCareGuide 已渲） *@
+                @{
+                    var envInLayout = (ViewBag.CareGuideSectionOrder as CareGuideSectionOrderDto)
+                        ?.Entries.Any(e => e.Enabled && e.ModuleId == CareGuideModuleIds.EnvironmentAnalysis) == true;
+                }
+                @if (!envInLayout)
+                {
+                    @await Html.PartialAsync("_EnvironmentAdvice", Model.Profile)
+                }
 
                 @if (!string.IsNullOrWhiteSpace(Model.Description))
                 {
@@ -418,7 +422,7 @@
     <div class="col-lg-5">
         <p class="section-label" id="sync-knowledge">進階</p>
         <section class="panel mb-4">
-            <div class="panel-header"><strong>同步官方資料</strong></div>
+            <div class="panel-header"><strong>重新產生照護知識</strong></div>
             <div class="panel-body">
                 @if (Model.Knowledge?.HasMissingFields == true)
                 {
@@ -426,11 +430,12 @@
                         目前仍缺：@string.Join("、", Model.Knowledge.MissingFields)
                     </div>
                 }
+                <p class="small text-muted mb-2">以 OpenAI 依目前物種強制重寫加厚照護指南（會覆蓋舊資料）。</p>
                 <form asp-action="SyncKnowledge" asp-route-id="@Model.Id" method="post">
                     @Html.AntiForgeryToken()
                     <label asp-for="SyncKnowledge.SpeciesKeyword" class="form-label"></label>
-                    <input asp-for="SyncKnowledge.SpeciesKeyword" class="form-control mb-2" placeholder="例如：玉露錦" />
-                    <button type="submit" class="btn btn-outline-emphasis btn-sm w-100">同步外部 API</button>
+                    <input asp-for="SyncKnowledge.SpeciesKeyword" class="form-control mb-2" placeholder="例如：縞馬蘿藦" />
+                    <button type="submit" class="btn btn-outline-emphasis btn-sm w-100">重新產生照護知識</button>
                 </form>
             </div>
         </section>

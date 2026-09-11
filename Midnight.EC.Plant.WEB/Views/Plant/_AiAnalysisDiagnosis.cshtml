@@ -1,0 +1,154 @@
+@using Midnight.EC.Plant.WEB.Models.AI
+@using Midnight.EC.Plant.WEB.Models.External
+@model PlantAnalysisResultDto?
+@{
+    var a = Model;
+    if (a == null)
+    {
+        return;
+    }
+
+    var env = a.EnvironmentAssessment;
+    var hasEnv = env != null && (
+        !string.IsNullOrWhiteSpace(env.Light)
+        || !string.IsNullOrWhiteSpace(env.Water)
+        || !string.IsNullOrWhiteSpace(env.Humidity)
+        || !string.IsNullOrWhiteSpace(env.Temperature));
+
+    var actionItems = new List<string>(a.Recommendations ?? []);
+    if (!string.IsNullOrWhiteSpace(a.WateringAdvice)
+        && !actionItems.Any(x => string.Equals(x, a.WateringAdvice, StringComparison.Ordinal)))
+    {
+        actionItems.Insert(0, $"澆水：{a.WateringAdvice}");
+    }
+
+    if (hasEnv)
+    {
+        if (!string.IsNullOrWhiteSpace(env!.Light)
+            && !actionItems.Any(x => x.Contains(env.Light, StringComparison.Ordinal)))
+        {
+            actionItems.Add($"光照：{env.Light}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(env.Water)
+            && !actionItems.Any(x => x.Contains(env.Water, StringComparison.Ordinal))
+            && (a.WateringAdvice == null || !env.Water.Contains(a.WateringAdvice, StringComparison.Ordinal)))
+        {
+            actionItems.Add($"水分評估：{env.Water}");
+        }
+    }
+
+    var notices = (a.Alerts ?? []).Concat(a.Warning ?? [])
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.Ordinal)
+        .ToList();
+}
+
+@if (!string.IsNullOrWhiteSpace(a.Summary))
+{
+    <p class="small mb-2">@a.Summary</p>
+}
+
+@if (a.Observations?.Count > 0)
+{
+    <div class="ai-diag-block">
+        <div class="ai-diag-title">已觀察</div>
+        <ul class="ai-diag-list">
+            @foreach (var item in a.Observations)
+            {
+                <li>@item</li>
+            }
+        </ul>
+    </div>
+}
+
+@if (a.PossibleIssues?.Count > 0)
+{
+    <div class="ai-diag-block">
+        <div class="ai-diag-title">可能原因</div>
+        <ul class="ai-diag-list">
+            @foreach (var item in a.PossibleIssues)
+            {
+                <li>@item</li>
+            }
+        </ul>
+    </div>
+}
+
+@if (a.NutrientHypotheses?.Count > 0)
+{
+    <div class="ai-diag-block">
+        <div class="ai-diag-title">養分假說</div>
+        <ul class="ai-diag-list">
+            @foreach (var h in a.NutrientHypotheses)
+            {
+                <li>
+                    <strong>可能缺@(h.Nutrient)</strong>
+                    @if (!string.IsNullOrWhiteSpace(h.Likelihood))
+                    {
+                        <span class="text-muted">（可能性：@h.Likelihood）</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(h.VisualClues))
+                    {
+                        <span> — @h.VisualClues</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(h.Caveat))
+                    {
+                        <div class="small text-muted">@h.Caveat</div>
+                    }
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@if (actionItems.Count > 0)
+{
+    <div class="ai-diag-block">
+        <div class="ai-diag-title">建議作法</div>
+        <ul class="ai-diag-list">
+            @foreach (var item in actionItems)
+            {
+                <li>@item</li>
+            }
+        </ul>
+    </div>
+}
+
+@if (notices.Count > 0)
+{
+    <div class="ai-diag-block">
+        <div class="ai-diag-title">需注意</div>
+        <ul class="ai-diag-list">
+            @foreach (var item in notices)
+            {
+                <li>@item</li>
+            }
+        </ul>
+    </div>
+}
+
+@if (a.FertilizerAdvice != null)
+{
+    var f = a.FertilizerAdvice;
+    var (strong, mild) = CareGuideJson.ResolveDilutionRange(f);
+    <div class="ai-diag-block">
+        <div class="ai-diag-title">與本次相關的施肥建議</div>
+        <p class="small mb-0">
+            @(string.IsNullOrWhiteSpace(f.Type) ? "液肥" : f.Type)
+            @if (!string.IsNullOrWhiteSpace(f.NpkHint))
+            {
+                <span>／NPK @f.NpkHint</span>
+            }
+            <span>／稀釋 @strong–@mild 倍</span>
+            @if (!string.IsNullOrWhiteSpace(f.Frequency))
+            {
+                <span>／@f.Frequency</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(f.Notes))
+            {
+                <span>。@f.Notes</span>
+            }
+        </p>
+    </div>
+}

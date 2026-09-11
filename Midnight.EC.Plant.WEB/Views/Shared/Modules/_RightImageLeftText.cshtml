@@ -1,0 +1,28 @@
+@model Midnight.EC.Plant.WEB.Models.DTOs.PageComposerModuleDto
+@{
+    var img = Model.Images.FirstOrDefault();
+}
+
+<section class="pc-module pc-split pc-split-right @Model.Theme" data-module-type="@Model.Type" aria-label="@Model.Title">
+    <div class="pc-split-copy">
+        @if (!string.IsNullOrWhiteSpace(Model.Subtitle))
+        {
+            <p class="pc-eyebrow">@Model.Subtitle</p>
+        }
+        <h2 class="pc-heading">@Model.Title</h2>
+        @if (!string.IsNullOrWhiteSpace(Model.Body))
+        {
+            <p class="pc-body">@Model.Body</p>
+        }
+    </div>
+    <div class="pc-split-media">
+        @if (img != null && !string.IsNullOrWhiteSpace(img.Url))
+        {
+            <img src="@img.Url" alt="@(img.Alt ?? Model.Title)" loading="lazy" />
+        }
+        else
+        {
+            <div class="pc-placeholder-visual" role="img" aria-label="@(img?.Alt ?? Model.Title)"></div>
+        }
+    </div>
+</section>

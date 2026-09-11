@@ -5,6 +5,7 @@ using Midnight.EC.Plant.WEB.Models.Enums;
 using Midnight.EC.Plant.WEB.Models.Extensions;
 using Midnight.EC.Plant.WEB.Models.External;
 using Midnight.EC.Plant.WEB.Models.Respository;
+using Midnight.EC.Plant.WEB.Services.AI;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Services.PlantKnowledge;
 using Midnight.EC.Plant.WEB.Services.PlantProfile;
@@ -19,7 +20,7 @@ public class PlantService
 
     private readonly PlantRespo _plantRepository;
     private readonly PlantSpeciesRespo _speciesRepository;
-    private readonly IExternalPlantApiService _externalPlantApiService;
+    private readonly IOpenAISpeciesFinderService _speciesFinder;
     private readonly PlantKnowledgeService _plantKnowledgeService;
     private readonly PlantProfileService _plantProfileService;
     private readonly PlantCareService _plantCareService;
@@ -28,7 +29,7 @@ public class PlantService
     public PlantService(
         PlantRespo plantRepository,
         PlantSpeciesRespo speciesRepository,
-        IExternalPlantApiService externalPlantApiService,
+        IOpenAISpeciesFinderService speciesFinder,
         PlantKnowledgeService plantKnowledgeService,
         PlantProfileService plantProfileService,
         PlantCareService plantCareService,
@@ -36,7 +37,7 @@ public class PlantService
     {
         _plantRepository = plantRepository;
         _speciesRepository = speciesRepository;
-        _externalPlantApiService = externalPlantApiService;
+        _speciesFinder = speciesFinder;
         _plantKnowledgeService = plantKnowledgeService;
         _plantProfileService = plantProfileService;
         _plantCareService = plantCareService;
@@ -55,7 +56,14 @@ public class PlantService
     public Task<IReadOnlyList<ExternalSpeciesResult>> SearchSpeciesCandidatesAsync(
         string keyword,
         CancellationToken cancellationToken = default) =>
-        _externalPlantApiService.SearchSpeciesCandidatesAsync(keyword, cancellationToken);
+        _speciesFinder.FindByTextAsync(keyword, cancellationToken);
+
+    public Task<IReadOnlyList<ExternalSpeciesResult>> SearchSpeciesCandidatesByImageAsync(
+        Stream imageStream,
+        string fileName,
+        string? chineseHint,
+        CancellationToken cancellationToken = default) =>
+        _speciesFinder.FindByImageAsync(imageStream, fileName, chineseHint, cancellationToken);
 
     public Task<PlantDto> CreateAsync(
         string name,
@@ -116,14 +124,19 @@ public class PlantService
         }
 
         var species = await ResolveOrCreateSpeciesAsync(confirmedSpecies, chineseName.Trim(), cancellationToken);
-        try
+        var refresh = await _plantKnowledgeService.RefreshFromExternalAsync(species.ID, chineseName.Trim(), cancellationToken);
+        if (refresh.AiSupplement == AiSupplementOutcome.ServiceFailed)
         {
-            // 建檔／確保知識時一律強制同步，與詳情頁「同步外部」同格式（結構化 speciesGuide）
-            await _plantKnowledgeService.RefreshFromExternalAsync(species.ID, chineseName.Trim(), cancellationToken);
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(refresh.AiFailureReason)
+                    ? "OpenAI 產生照護知識失敗，未換綁。"
+                    : refresh.AiFailureReason);
         }
-        catch (Exception ex)
+
+        if (CareKnowledgeCompleteness.HasGaps(refresh.Knowledge))
         {
-            _logger.LogWarning(ex, "Knowledge sync failed for species {SpeciesId} during ensure", species.ID);
+            var gaps = string.Join("、", CareKnowledgeCompleteness.ListMissingFields(refresh.Knowledge));
+            throw new InvalidOperationException($"照護知識仍不完整（{gaps}），請重試。");
         }
 
         return species.ID;

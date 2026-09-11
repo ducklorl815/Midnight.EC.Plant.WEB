@@ -3,13 +3,20 @@
 @model Midnight.EC.Plant.WEB.ViewModels.PlantProfileViewModel
 @{
     var advice = CareGuideJson.TryParseEnvironmentAdvice(Model.AiEnvironmentAdvice);
+    var embedded = ViewBag.EmbedEnvironmentAdvice as bool? == true;
 }
 
 @if (advice != null)
 {
-    <hr class="my-3" />
+    if (!embedded)
+    {
+        <hr class="my-3" />
+    }
     <div class="care-block">
-        <div class="small text-muted mb-1">針對你的實際環境</div>
+        @if (!embedded)
+        {
+            <div class="small text-muted mb-1">針對你的實際環境</div>
+        }
         @if (!string.IsNullOrWhiteSpace(advice.FitSummary))
         {
             <div class="care-guide-text mb-2">@advice.FitSummary</div>
@@ -59,21 +66,19 @@
 }
 else if (!string.IsNullOrWhiteSpace(Model.AiEnvironmentAdvice))
 {
-    <hr class="my-3" />
-    <div class="small text-muted mb-1">針對你的實際環境</div>
+    if (!embedded)
+    {
+        <hr class="my-3" />
+        <div class="small text-muted mb-1">針對你的實際環境</div>
+    }
     <div class="care-guide-text">@Model.AiEnvironmentAdvice</div>
-    <div class="small text-muted mt-2">
-        依據：
-        @(Model.ActualPlacement.HasValue ? PlacementTypeDisplay.ToLabel(Model.ActualPlacement) : "位置未設")
-        ／@(Model.ActualLight.HasValue ? LightLevelDisplay.ToLabel(Model.ActualLight) : "日照未設")
-        ／@(Model.HasRainCover == true ? "有遮雨" : Model.HasRainCover == false ? "無遮雨" : "遮雨未設")
-        ／@(string.IsNullOrWhiteSpace(Model.SubstrateType) ? "介質未設" : Model.SubstrateType)
-        ／@(Model.SaucerState.HasValue ? SaucerStateDisplay.ToLabel(Model.SaucerState) : "水盤未設")
-    </div>
+}
+else if (embedded)
+{
+    <p class="text-muted mb-0 small">尚無環境適配分析。請確認已填實際環境後重新產生／儲存環境。</p>
 }
 else if (Model.ActualPlacement != null || Model.ActualLight != null)
 {
     <hr class="my-3" />
-    <p class="text-muted mb-0 small">已有實際環境，但尚未產出適配建議。請再按一次「同步官方資料」，或重新儲存實際環境。</p>
+    <p class="text-muted mb-0 small">已有實際環境，但尚未產出適配建議。請再按「重新產生照護知識」，或重新儲存實際環境。</p>
 }
-

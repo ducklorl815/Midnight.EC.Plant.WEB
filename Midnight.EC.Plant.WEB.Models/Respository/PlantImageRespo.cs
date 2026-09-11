@@ -40,6 +40,34 @@ FROM dbo.PlantImage WHERE Deleted = 0";
             new { PlantId = plantId }, cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyDictionary<Guid, PlantImageModel>> GetCoversByPlantIdsAsync(
+        IReadOnlyCollection<Guid> plantIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (plantIds.Count == 0)
+            return new Dictionary<Guid, PlantImageModel>();
+
+        using var conn = Conn();
+        var rows = (await conn.QueryAsync<PlantImageModel>(new CommandDefinition(
+            SelectSql + " AND Enabled = 1 AND PlantID IN @PlantIds AND IsCover = 1",
+            new { PlantIds = plantIds.ToArray() },
+            cancellationToken: cancellationToken))).ToList();
+
+        // Fallback: if no IsCover, pick latest image per plant
+        var missing = plantIds.Where(id => rows.All(r => r.PlantID != id)).ToList();
+        if (missing.Count > 0)
+        {
+            var fallbacks = await conn.QueryAsync<PlantImageModel>(new CommandDefinition(
+                SelectSql + " AND Enabled = 1 AND PlantID IN @PlantIds ORDER BY CreateDate DESC",
+                new { PlantIds = missing.ToArray() },
+                cancellationToken: cancellationToken));
+            foreach (var group in fallbacks.GroupBy(r => r.PlantID))
+                rows.Add(group.First());
+        }
+
+        return rows.GroupBy(r => r.PlantID).ToDictionary(g => g.Key, g => g.First());
+    }
+
     public async Task InsertAsync(PlantImageModel image, CancellationToken cancellationToken = default)
     {
         image.ID = image.ID == Guid.Empty ? Guid.NewGuid() : image.ID;

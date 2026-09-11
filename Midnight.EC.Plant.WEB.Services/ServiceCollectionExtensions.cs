@@ -8,6 +8,7 @@ using Midnight.EC.Plant.WEB.Services.Configuration;
 using Midnight.EC.Plant.WEB.Services.ContentParser;
 using Midnight.EC.Plant.WEB.Services.External;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
+using Midnight.EC.Plant.WEB.Services.PageComposer;
 using Midnight.EC.Plant.WEB.Services.Plant;
 using Midnight.EC.Plant.WEB.Services.PlantAnalysis;
 using Midnight.EC.Plant.WEB.Services.PlantDiary;
@@ -57,8 +58,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<PlantCareRecordRespo>();
         services.AddScoped<PlantProfileRespo>();
         services.AddScoped<PlantReminderRespo>();
+        services.AddScoped<PhotoWallLayoutRespo>();
+        services.AddScoped<PageComposerLayoutRespo>();
 
         services.AddScoped<PlantService>();
+        services.AddScoped<PhotoWallLayoutService>();
+        services.AddScoped<PageComposerService>();
+        services.AddScoped<PageComposerHomeBuilder>();
         services.AddScoped<PlantKnowledgeService>();
         services.AddScoped<PlantDiaryService>();
         services.AddScoped<PlantImageService>();
@@ -71,6 +77,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IImageStorageService, LocalImageStorageService>();
         services.AddScoped<IAIAgentService, OpenAIPlantAgentService>();
         services.AddScoped<ICareKnowledgeSynthesisService, CareKnowledgeSynthesisService>();
+        services.AddScoped<IOpenAISpeciesFinderService, OpenAISpeciesFinderService>();
+        services.AddScoped<CareGuideLayoutService>();
         services.AddScoped<PlantAnalysisService>();
 
         services.AddScoped<IContentFetcher, ContentFetcher>();

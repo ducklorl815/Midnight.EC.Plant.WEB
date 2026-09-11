@@ -1,0 +1,94 @@
+@model Midnight.EC.Plant.WEB.Models.External.CareGuideSectionOrderDto
+@using Midnight.EC.Plant.WEB.Models.External
+@using System.Text.Json
+
+@{
+    ViewData["Title"] = "照護指南版面";
+    var seed = Model.Entries.Select(e => new { moduleId = e.ModuleId, enabled = e.Enabled, order = e.Order }).ToList();
+}
+
+@if (TempData["Error"] is string err)
+{
+    <div class="alert alert-warning mb-3">@err</div>
+}
+@if (TempData["Success"] is string ok)
+{
+    <div class="alert alert-success mb-3">@ok</div>
+}
+
+<div class="page-header mb-4">
+    <h1 class="page-title">照護指南版面</h1>
+    <p class="page-subtitle">拖移調整詳情頁模組順序，並可開關顯示（全站共用）。無內容的模組仍會自動收合。</p>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <section class="panel">
+            <div class="panel-header"><strong>模組順序與開關</strong></div>
+            <div class="panel-body">
+                <ul class="cg-order-list" id="cg-order-list">
+                    @foreach (var e in Model.Entries.OrderBy(x => x.Order))
+                    {
+                        <li class="cg-order-item" draggable="true" data-key="@e.ModuleId">
+                            <span class="cg-order-handle" aria-hidden="true">⠿</span>
+                            <label class="form-check mb-0 d-flex align-items-center gap-2 flex-grow-1">
+                                <input type="checkbox" class="form-check-input cg-enabled" @(e.Enabled ? "checked" : null) />
+                                <span class="fw-semibold">@CareGuideModuleRegistry.TitleOf(e.ModuleId)</span>
+                            </label>
+                            <span class="small text-muted">@e.ModuleId</span>
+                        </li>
+                    }
+                </ul>
+
+                <form asp-action="CareGuideLayout" method="post" id="cg-save-form" class="mt-3 d-flex gap-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="layoutJson" id="cg-layout-json" />
+                    <button type="submit" class="btn btn-plant-primary">儲存</button>
+                    <a asp-action="Index" class="btn btn-outline-secondary">回設定</a>
+                </form>
+            </div>
+        </section>
+    </div>
+</div>
+
+<script type="application/json" id="cg-seed">@Html.Raw(JsonSerializer.Serialize(seed))</script>
+
+@section Scripts {
+<script>
+(() => {
+  const list = document.getElementById('cg-order-list');
+  const form = document.getElementById('cg-save-form');
+  const hidden = document.getElementById('cg-layout-json');
+  if (!list || !form || !hidden) return;
+
+  let dragEl = null;
+  list.querySelectorAll('.cg-order-item').forEach(item => {
+    item.addEventListener('dragstart', () => {
+      dragEl = item;
+      item.classList.add('opacity-50');
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('opacity-50');
+      dragEl = null;
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      const over = e.currentTarget;
+      if (!dragEl || dragEl === over) return;
+      const rect = over.getBoundingClientRect();
+      const before = (e.clientY - rect.top) < rect.height / 2;
+      list.insertBefore(dragEl, before ? over : over.nextSibling);
+    });
+  });
+
+  form.addEventListener('submit', () => {
+    const entries = [...list.querySelectorAll('.cg-order-item')].map((el, i) => ({
+      moduleId: el.dataset.key,
+      enabled: !!el.querySelector('.cg-enabled')?.checked,
+      order: (i + 1) * 10
+    }));
+    hidden.value = JSON.stringify({ version: 2, entries });
+  });
+})();
+</script>
+}

@@ -8,7 +8,7 @@
     <h1 class="page-title">確認物種</h1>
     <p class="page-subtitle">
         暱稱「@Model.Draft.NickName」／中文名「@Model.Draft.ChineseName」。
-        @(Model.Candidates.Count == 0 ? "沒有候選，可手填學名或先建檔。" : "請確認後寫入（即使只有 1 筆也要確認）。")
+        @(Model.Candidates.Count == 0 ? "沒有候選，可改中文名／學名再查，或先建檔。" : "請確認後寫入（確認時會寫滿照護知識）。")
     </p>
 </div>
 
@@ -55,15 +55,15 @@
                                 {
                                     <img src="@c.ImageUrl" alt="@c.ScientificName" class="img-fluid rounded mb-2" style="max-height:140px;object-fit:cover;width:100%;" />
                                 }
-                                else
-                                {
-                                    <div class="bg-light rounded mb-2 d-flex align-items-center justify-content-center text-muted" style="height:100px;">無圖</div>
-                                }
                                 <div class="small text-muted">
                                     @if (!string.IsNullOrWhiteSpace(c.CommonName)) { <div>俗名：@c.CommonName</div> }
                                     @if (!string.IsNullOrWhiteSpace(c.Family) || !string.IsNullOrWhiteSpace(c.Genus))
                                     {
                                         <div>科屬：@c.Family @c.Genus</div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(c.IdentificationHint))
+                                    {
+                                        <div class="mt-1">@c.IdentificationHint</div>
                                     }
                                     <div>來源：@c.Provider</div>
                                 </div>
@@ -73,6 +73,7 @@
                                 <input type="hidden" name="Candidates[@i].Genus" value="@c.Genus" />
                                 <input type="hidden" name="Candidates[@i].Family" value="@c.Family" />
                                 <input type="hidden" name="Candidates[@i].ImageUrl" value="@c.ImageUrl" />
+                                <input type="hidden" name="Candidates[@i].IdentificationHint" value="@c.IdentificationHint" />
                                 <input type="hidden" name="Candidates[@i].TaxonId" value="@c.TaxonId" />
                                 <input type="hidden" name="Candidates[@i].Provider" value="@c.Provider" />
                                 <input type="hidden" name="Candidates[@i].SourceType" value="@c.SourceType" />
@@ -103,21 +104,25 @@
             <div class="empty-state mb-4">
                 <div class="empty-state-icon">🔍</div>
                 <h2 class="h5">找不到候選物種</h2>
-                <p class="text-muted mb-0">可改手填學名再查，或先建檔、知識之後補。</p>
+                <p class="text-muted mb-0">可改中文名／學名再查，或先建檔、知識之後補。</p>
             </div>
         }
 
         <section class="panel mb-3">
-            <div class="panel-header"><strong>手填學名再查</strong></div>
+            <div class="panel-header"><strong>中文／學名再查</strong></div>
             <div class="panel-body">
                 <form asp-action="SearchByScientificName" method="post" class="row g-2 align-items-end">
                     <partial name="_CreateDraftHidden" model="Model.Draft" />
-                    <div class="col-md-8">
-                        <label asp-for="ManualScientificName" class="form-label"></label>
-                        <input asp-for="ManualScientificName" class="form-control" placeholder="例如：Stephania erecta" />
+                    <div class="col-md-6">
+                        <label asp-for="ManualChineseName" class="form-label"></label>
+                        <input asp-for="ManualChineseName" class="form-control" placeholder="例如：縞馬蘿藦" />
                     </div>
-                    <div class="col-md-4">
-                        <button type="submit" class="btn btn-outline-emphasis w-100">查學名</button>
+                    <div class="col-md-6">
+                        <label asp-for="ManualScientificName" class="form-label"></label>
+                        <input asp-for="ManualScientificName" class="form-control" placeholder="進階：Huernia zebrina" />
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-outline-emphasis">再查一次</button>
                     </div>
                 </form>
             </div>
@@ -126,7 +131,7 @@
         <section class="panel panel-quiet">
             <div class="panel-header"><strong>先建檔、知識之後補</strong></div>
             <div class="panel-body">
-                <p class="text-muted small mb-3">斷網或對不到物種時可用。會保存實際環境但不打 AI；之後在詳情頁手動同步。</p>
+                <p class="text-muted small mb-3">斷網或對不到物種時可用。會保存實際環境但不打 AI；之後在詳情頁「重新產生照護知識」。</p>
                 <form asp-action="CreateWithoutSpecies" method="post">
                     <partial name="_CreateDraftHidden" model="Model.Draft" />
                     <button type="submit" class="btn btn-outline-secondary">略過物種，直接建立</button>
@@ -135,4 +140,3 @@
         </section>
     </div>
 </div>
-

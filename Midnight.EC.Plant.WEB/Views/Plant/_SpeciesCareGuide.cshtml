@@ -3,39 +3,147 @@
 @{
     var guide = Model;
     var legacy = ViewBag.LegacyCareGuide as string;
+    var order = ViewBag.CareGuideSectionOrder as CareGuideSectionOrderDto
+        ?? CareGuideSectionOrderDto.Normalize(null);
+    var profile = ViewBag.PlantProfile as Midnight.EC.Plant.WEB.ViewModels.PlantProfileViewModel;
 }
 
-@if (guide != null)
+@if (guide != null && guide.HasArticleContent())
 {
-    <div class="care-block">
-        <div class="small text-muted mb-1">物種照護說明</div>
+    <article class="care-article">
         @if (!string.IsNullOrWhiteSpace(guide.ScientificName) || !string.IsNullOrWhiteSpace(guide.ChineseName))
         {
-            <p class="care-guide-title mb-2">
-                @if (!string.IsNullOrWhiteSpace(guide.ScientificName) && !string.IsNullOrWhiteSpace(guide.ChineseName))
+            <header class="care-article-header">
+                @if (!string.IsNullOrWhiteSpace(guide.ScientificName))
                 {
-                    <span class="care-guide-scientific">@guide.ScientificName</span>
-                    <span>（@guide.ChineseName）</span>
+                    <h3 class="care-article-scientific">@guide.ScientificName</h3>
                 }
-                else if (!string.IsNullOrWhiteSpace(guide.ScientificName))
+                @if (!string.IsNullOrWhiteSpace(guide.ChineseName))
                 {
-                    <span class="care-guide-scientific">@guide.ScientificName</span>
+                    <p class="care-article-chinese mb-0">@guide.ChineseName</p>
                 }
-                else
-                {
-                    @guide.ChineseName
-                }
-            </p>
+            </header>
         }
-        @if (!string.IsNullOrWhiteSpace(guide.Summary))
+
+        @foreach (var entry in order.Entries.Where(e => e.Enabled).OrderBy(e => e.Order))
         {
-            <div class="care-guide-text">@guide.Summary</div>
+            var id = entry.ModuleId;
+
+            if (string.Equals(id, CareGuideModuleIds.EnvironmentAnalysis, StringComparison.OrdinalIgnoreCase))
+            {
+                if (profile != null)
+                {
+                    <section class="care-article-section">
+                        <h4 class="care-article-heading">@CareGuideModuleRegistry.TitleOf(id)</h4>
+                        @{ ViewBag.EmbedEnvironmentAdvice = true; }
+                        @await Html.PartialAsync("_EnvironmentAdvice", profile)
+                    </section>
+                }
+                continue;
+            }
+
+            var mod = guide.FindModule(id);
+            var showFertilizerCard = string.Equals(id, CareGuideModuleIds.Fertilizer, StringComparison.OrdinalIgnoreCase)
+                && (guide.FertilizerRecipe != null || guide.Fertilizer != null);
+
+            if (mod == null && !showFertilizerCard)
+            {
+                continue;
+            }
+
+            if (mod != null && !mod.HasContent() && !showFertilizerCard)
+            {
+                continue;
+            }
+
+            <section class="care-article-section">
+                <h4 class="care-article-heading">@CareGuideModuleRegistry.TitleOf(id)</h4>
+
+                @if (string.Equals(id, CareGuideModuleIds.BasicInfo, StringComparison.OrdinalIgnoreCase))
+                {
+                    var b = mod?.Basics ?? guide.Basics;
+                    if (SpeciesCareGuideDto.BasicsHasContent(b))
+                    {
+                        <table class="care-basics-table">
+                            @if (b!.AlsoKnownAs.Count > 0)
+                            {
+                                <tr><th>又名</th><td>@string.Join("、", b.AlsoKnownAs)</td></tr>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.EnglishName))
+                            {
+                                <tr><th>英文</th><td>@b.EnglishName</td></tr>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.Family))
+                            {
+                                <tr><th>科</th><td>@b.Family</td></tr>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.Subfamily))
+                            {
+                                <tr><th>亞科</th><td>@b.Subfamily</td></tr>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.Genus))
+                            {
+                                <tr><th>屬</th><td>@b.Genus</td></tr>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.PlantType))
+                            {
+                                <tr><th>類型</th><td>@b.PlantType</td></tr>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.NativeRange))
+                            {
+                                <tr><th>原生地</th><td>@b.NativeRange</td></tr>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.Height))
+                            {
+                                <tr><th>高度</th><td>@b.Height</td></tr>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.Stem))
+                            {
+                                <tr><th>莖</th><td>@b.Stem</td></tr>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.Flower))
+                            {
+                                <tr><th>花</th><td>@b.Flower</td></tr>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(b.GrowthHabit))
+                            {
+                                <tr><th>生長型態</th><td>@b.GrowthHabit</td></tr>
+                            }
+                        </table>
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(mod?.Content))
+                {
+                    <div class="care-guide-text">@mod!.Content</div>
+                }
+
+                @if (mod?.Tips.Count > 0)
+                {
+                    <ul class="care-bullet-list mt-2">
+                        @foreach (var tip in mod.Tips)
+                        {
+                            <li>@tip</li>
+                        }
+                    </ul>
+                }
+                @if (mod?.Warnings.Count > 0)
+                {
+                    <ul class="care-bullet-list mt-2 text-danger">
+                        @foreach (var w in mod.Warnings)
+                        {
+                            <li>@w</li>
+                        }
+                    </ul>
+                }
+
+                @if (showFertilizerCard)
+                {
+                    ViewBag.FertilizerBlockTitle = "施肥配方（可製作水肥）";
+                    @await Html.PartialAsync("_FertilizerRecipeGuide", guide.FertilizerRecipe ?? guide.Fertilizer)
+                }
+            </section>
         }
-        @if (guide.Fertilizer != null)
-        {
-            @await Html.PartialAsync("_FertilizerRecipeGuide", guide.Fertilizer)
-        }
-    </div>
+    </article>
 }
 else if (!string.IsNullOrWhiteSpace(legacy))
 {

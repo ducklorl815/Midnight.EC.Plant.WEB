@@ -45,6 +45,14 @@ public static class CareKnowledgeCompleteness
         {
             missing.Add("結構化照護指南");
         }
+        else
+        {
+            var guide = CareGuideJson.TryParseSpeciesGuide(knowledge.ExternalCareGuide);
+            if (guide?.QuickFacts == null || !guide.QuickFacts.HasAny())
+            {
+                // v2 相容：有模組／舊段落即可；缺 quickFacts 不算硬缺口（重產後才齊）
+            }
+        }
 
         return missing;
     }
@@ -101,6 +109,41 @@ public static class CareKnowledgeCompleteness
         string? externalCareGuide)
     {
         var missing = new List<string>();
+        var guide = CareGuideJson.TryParseSpeciesGuide(externalCareGuide);
+
+        if (guide != null && guide.HasArticleContent())
+        {
+            if (!ResolveSuggestedLight(suggestedLight, lightRequirement, careSummary, externalCareGuide).HasValue)
+            {
+                missing.Add("建議日照");
+            }
+
+            AddIfBlank(missing, "澆水", waterRequirement);
+            AddIfBlank(missing, "濕度", humidityRequirement);
+            if (!temperatureMin.HasValue) missing.Add("溫度下限");
+            if (!temperatureMax.HasValue) missing.Add("溫度上限");
+
+            if (guide.FindModule(CareGuideModuleIds.Soil) == null)
+            {
+                AddIfBlank(missing, "土壤", soilRequirement);
+            }
+
+            if (guide.FertilizerRecipe == null
+                && guide.Fertilizer == null
+                && guide.FindModule(CareGuideModuleIds.Fertilizer) == null)
+            {
+                AddIfBlank(missing, "施肥", fertilizerRequirement);
+            }
+
+            if (guide.FindModule(CareGuideModuleIds.GrowingSeason) == null
+                && (guide.QuickFacts?.GrowingSeason.Count ?? 0) == 0)
+            {
+                AddIfBlank(missing, "生長季", growthSeason);
+            }
+
+            return missing;
+        }
+
         AddIfBlank(missing, "光照", lightRequirement);
         if (!ResolveSuggestedLight(suggestedLight, lightRequirement, careSummary, externalCareGuide).HasValue)
         {
@@ -109,24 +152,12 @@ public static class CareKnowledgeCompleteness
 
         AddIfBlank(missing, "澆水", waterRequirement);
         AddIfBlank(missing, "濕度", humidityRequirement);
-        if (!temperatureMin.HasValue)
-        {
-            missing.Add("溫度下限");
-        }
-
-        if (!temperatureMax.HasValue)
-        {
-            missing.Add("溫度上限");
-        }
-
+        if (!temperatureMin.HasValue) missing.Add("溫度下限");
+        if (!temperatureMax.HasValue) missing.Add("溫度上限");
         AddIfBlank(missing, "土壤", soilRequirement);
         AddIfBlank(missing, "施肥", fertilizerRequirement);
         AddIfBlank(missing, "生長季", growthSeason);
-        if (IsBlank(externalCareGuide) || CareGuideJson.TryParseSpeciesGuide(externalCareGuide) == null)
-        {
-            missing.Add("結構化照護指南");
-        }
-
+        missing.Add("結構化照護指南");
         return missing;
     }
 

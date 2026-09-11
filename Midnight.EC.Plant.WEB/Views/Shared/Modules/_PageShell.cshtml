@@ -1,0 +1,35 @@
+@model Midnight.EC.Plant.WEB.ViewModels.PageComposerViewModel
+@{
+    var layout = Model.Layout;
+    var modules = layout.Modules
+        .Where(m => m.Enabled)
+        .OrderBy(m => m.Order)
+        .ToList();
+    var shellClass = Model.IsEditorPreview ? "pc-shell is-preview" : "pc-shell";
+    ViewData["CarouselSlides"] = Model.CarouselSlidesByModuleId;
+    ViewData["NotificationReminders"] = Model.NotificationReminders;
+}
+
+<div class="@shellClass">
+    <header class="pc-site-header">
+        <a class="pc-brand" asp-controller="Plant" asp-action="Index">我的植栽</a>
+        <nav class="pc-nav" aria-label="主選單">
+            <a asp-controller="Plant" asp-action="Index">首頁</a>
+            <a asp-controller="Plant" asp-action="Create">新增植栽</a>
+            <a asp-controller="Settings" asp-action="Index">設定</a>
+        </nav>
+    </header>
+
+    @foreach (var module in modules)
+    {
+        @await Html.PartialAsync("Modules/_ModuleSwitcher", module)
+    }
+
+    @if (!Model.IsEditorPreview)
+    {
+        <footer class="pc-site-footer">
+            <p class="pc-footer-brand">我的植栽</p>
+            <p class="pc-footer-meta">&copy; @DateTime.Now.Year · 模組拼圖首頁</p>
+        </footer>
+    }
+</div>

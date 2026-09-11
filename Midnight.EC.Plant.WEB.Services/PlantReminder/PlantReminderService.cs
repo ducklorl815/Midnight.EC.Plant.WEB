@@ -136,6 +136,91 @@ public class PlantReminderService
         return items;
     }
 
+    public async Task<List<NotificationReminderItemDto>> GetFiredNotificationItemsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await SyncRemindersAsync(null, cancellationToken);
+
+        var plants = await _plantRepository.GetAllActiveAsync(cancellationToken);
+        if (plants.Count == 0)
+            return [];
+
+        var plantIds = plants.Select(p => p.ID).ToList();
+        var reminders = await _reminderRepository.GetActiveForPlantsAsync(plantIds, cancellationToken);
+        if (reminders.Count == 0)
+            return [];
+
+        var profiles = await _profileRepository.GetByPlantIdsAsync(plantIds, cancellationToken);
+        var lastWatering = await _careRepository.GetLastWateringDatesAsync(plantIds, cancellationToken);
+        var lastFertilizing = await _careRepository.GetLastFertilizingDatesAsync(plantIds, cancellationToken);
+        var plantsById = plants.ToDictionary(p => p.ID);
+        var today = DateTime.Today;
+        var items = new List<NotificationReminderItemDto>();
+
+        foreach (var reminder in reminders)
+        {
+            if (!plantsById.TryGetValue(reminder.PlantID, out var plant))
+                continue;
+
+            profiles.TryGetValue(plant.ID, out var profile);
+            var displayName = !string.IsNullOrWhiteSpace(plant.NickName) ? plant.NickName! : plant.Name;
+
+            if (reminder.ReminderType == ReminderType.Watering)
+            {
+                var lastDate = lastWatering.TryGetValue(plant.ID, out var lw) ? lw.Date : plant.CreateDate.Date;
+                var interval = profile?.WateringIntervalDays
+                    ?? InferWateringIntervalDays(plant.Species?.Knowledge?.WaterRequirement);
+                var overdueDays = (today - lastDate).Days - interval;
+                if (overdueDays <= 0)
+                    continue;
+
+                items.Add(new NotificationReminderItemDto
+                {
+                    ReminderId = reminder.ID,
+                    PlantId = plant.ID,
+                    DisplayName = displayName,
+                    ReminderType = reminder.ReminderType,
+                    Priority = reminder.Priority,
+                    Headline = $"{displayName} 澆水提醒 — 到建議澆水已過 {overdueDays} 天",
+                    Message = reminder.Message,
+                    OverdueDays = overdueDays,
+                    ShowCompleteWater = true,
+                    ShowCompleteFertilize = false
+                });
+                continue;
+            }
+
+            if (reminder.ReminderType == ReminderType.Fertilizing)
+            {
+                var lastDate = lastFertilizing.TryGetValue(plant.ID, out var lf) ? lf.Date : plant.CreateDate.Date;
+                var interval = profile?.FertilizingIntervalDays ?? DefaultFertilizingIntervalDays;
+                var overdueDays = (today - lastDate).Days - interval;
+                if (overdueDays <= 0)
+                    continue;
+
+                items.Add(new NotificationReminderItemDto
+                {
+                    ReminderId = reminder.ID,
+                    PlantId = plant.ID,
+                    DisplayName = displayName,
+                    ReminderType = reminder.ReminderType,
+                    Priority = reminder.Priority,
+                    Headline = $"{displayName} 施肥提醒 — 到建議施肥已過 {overdueDays} 天",
+                    Message = reminder.Message,
+                    OverdueDays = overdueDays,
+                    ShowCompleteWater = false,
+                    ShowCompleteFertilize = true
+                });
+            }
+        }
+
+        return items
+            .OrderByDescending(i => i.Priority)
+            .ThenByDescending(i => i.OverdueDays)
+            .ThenBy(i => i.DisplayName, StringComparer.Ordinal)
+            .ToList();
+    }
+
     public async Task SyncRemindersAsync(Guid? plantId, CancellationToken cancellationToken = default)
     {
         var plants = plantId.HasValue

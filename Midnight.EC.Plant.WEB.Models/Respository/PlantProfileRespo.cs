@@ -27,6 +27,21 @@ FROM dbo.PlantProfile WHERE Deleted = 0";
             SelectSql + " AND PlantID = @PlantId", new { PlantId = plantId }, cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyDictionary<Guid, PlantProfileModel>> GetByPlantIdsAsync(
+        IReadOnlyCollection<Guid> plantIds,
+        CancellationToken cancellationToken = default)
+    {
+        if (plantIds.Count == 0)
+            return new Dictionary<Guid, PlantProfileModel>();
+
+        using var conn = Conn();
+        var rows = await conn.QueryAsync<PlantProfileModel>(new CommandDefinition(
+            SelectSql + " AND PlantID IN @PlantIds",
+            new { PlantIds = plantIds.ToArray() },
+            cancellationToken: cancellationToken));
+        return rows.GroupBy(r => r.PlantID).ToDictionary(g => g.Key, g => g.First());
+    }
+
     public async Task InsertAsync(PlantProfileModel profile, CancellationToken cancellationToken = default)
     {
         profile.ID = profile.ID == Guid.Empty ? Guid.NewGuid() : profile.ID;

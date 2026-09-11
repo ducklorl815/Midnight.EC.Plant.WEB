@@ -8,43 +8,55 @@
     <link rel="stylesheet" href="~/Midnight.EC.Plant.WEB.styles.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-light mb-3">
-            <div class="container">
-                <a class="navbar-brand" asp-controller="Plant" asp-action="Index">
-                    <span class="brand-mark" aria-hidden="true">🌿</span>我的植栽
-                </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="選單">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="mainNav">
-                    <ul class="navbar-nav ms-auto">
-                        <li class="nav-item">
-                            <a class="nav-link" asp-controller="Plant" asp-action="Index">首頁</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-controller="Plant" asp-action="Create">新增植栽</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" asp-controller="Settings" asp-action="Index">設定</a>
-                        </li>
-                    </ul>
+@{
+    var homeChrome = ViewData["HomeChrome"] as bool? == true;
+    var wallEditor = ViewData["WallEditor"] as bool? == true;
+    var bodyClass = homeChrome ? "home-chrome" : (wallEditor ? "wall-editor-chrome" : "");
+    var mainClass = homeChrome || wallEditor ? "container-fluid home-fluid pb-0 flex-grow-1" : "container pb-5 flex-grow-1";
+}
+<body class="@bodyClass">
+    @if (!homeChrome)
+    {
+        <header>
+            <nav class="navbar navbar-expand-sm navbar-light @(wallEditor ? "mb-0 navbar-wall" : "mb-3")">
+                <div class="@(wallEditor ? "container-fluid px-3" : "container")">
+                    <a class="navbar-brand" asp-controller="Plant" asp-action="Index">
+                        <span class="brand-mark" aria-hidden="true">🌿</span>我的植栽
+                    </a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="選單">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div class="collapse navbar-collapse" id="mainNav">
+                        <ul class="navbar-nav ms-auto">
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Plant" asp-action="Index">首頁</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Plant" asp-action="Create">新增植栽</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Settings" asp-action="Index">設定</a>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
-            </div>
-        </nav>
-    </header>
-    <div class="container pb-5 flex-grow-1">
+            </nav>
+        </header>
+    }
+    <div class="@mainClass">
         <main role="main">
             @RenderBody()
         </main>
     </div>
 
-    <footer class="border-top footer text-muted py-3 mt-auto">
-        <div class="container text-center small">
-            &copy; 2026 我的植栽
-        </div>
-    </footer>
+    @if (!homeChrome && !wallEditor)
+    {
+        <footer class="border-top footer text-muted py-3 mt-auto">
+            <div class="container text-center small">
+                &copy; 2026 我的植栽
+            </div>
+        </footer>
+    }
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>

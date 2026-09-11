@@ -33,7 +33,16 @@ FROM dbo.PlantCareRecord WHERE Deleted = 0";
             new { PlantId = plantId, Since = since }, cancellationToken: cancellationToken))).ToList();
     }
 
-    public async Task<Dictionary<Guid, DateTime>> GetLastWateringDatesAsync(IEnumerable<Guid> plantIds, CancellationToken cancellationToken = default)
+    public Task<Dictionary<Guid, DateTime>> GetLastWateringDatesAsync(IEnumerable<Guid> plantIds, CancellationToken cancellationToken = default)
+        => GetLastCareDatesAsync(plantIds, CareRecordType.Watering, cancellationToken);
+
+    public Task<Dictionary<Guid, DateTime>> GetLastFertilizingDatesAsync(IEnumerable<Guid> plantIds, CancellationToken cancellationToken = default)
+        => GetLastCareDatesAsync(plantIds, CareRecordType.Fertilizing, cancellationToken);
+
+    private async Task<Dictionary<Guid, DateTime>> GetLastCareDatesAsync(
+        IEnumerable<Guid> plantIds,
+        CareRecordType careType,
+        CancellationToken cancellationToken)
     {
         var idList = plantIds.Distinct().ToList();
         if (idList.Count == 0) return new Dictionary<Guid, DateTime>();
@@ -44,7 +53,7 @@ SELECT PlantID, MAX(RecordDate) AS LastDate
 FROM dbo.PlantCareRecord
 WHERE Deleted = 0 AND Enabled = 1 AND CareType = @CareType AND PlantID IN @Ids
 GROUP BY PlantID",
-            new { CareType = (int)CareRecordType.Watering, Ids = idList }, cancellationToken: cancellationToken));
+            new { CareType = (int)careType, Ids = idList }, cancellationToken: cancellationToken));
         return rows.ToDictionary(r => r.PlantID, r => r.LastDate);
     }
 

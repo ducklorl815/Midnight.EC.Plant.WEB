@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Midnight.EC.Plant.WEB.Models.DTOs;
 using Midnight.EC.Plant.WEB.Models.Enums;
+using Midnight.EC.Plant.WEB.Services.Plant;
 
 namespace Midnight.EC.Plant.WEB.ViewModels;
 
@@ -11,7 +13,40 @@ public class PlantListViewModel
     public List<PlantDashboardCardViewModel> IncompleteData { get; set; } = [];
     public int TotalActiveReminders { get; set; }
     public int TotalOverdueReminders { get; set; }
+    public PhotoWallLayoutDto WallLayout { get; set; } = new();
+    public List<PhotoWallTileViewModel> WallTiles { get; set; } = [];
+    public string WallColumnTemplate { get; set; } = "";
+    public string WallRowTemplate { get; set; } = "";
+    public int WallContentRowCount { get; set; } = 1;
 }
+
+public class PhotoWallTileViewModel
+{
+    public PlantDashboardCardViewModel Plant { get; set; } = new();
+    public int ColSpan { get; set; } = 1;
+    public int RowSpan { get; set; } = 1;
+    public int Order { get; set; }
+    public int Col { get; set; }
+    public int Row { get; set; }
+    public double Zoom { get; set; } = 1;
+    public double FocusX { get; set; } = 0;
+    public double FocusY { get; set; } = 100;
+
+    public int GridColumnStart => PhotoWallPacker.ContentLine(Col);
+    public int GridColumnSpan => PhotoWallPacker.SpanTracks(ColSpan);
+    public int GridRowStart => PhotoWallPacker.ContentLine(Row);
+    public int GridRowSpan => PhotoWallPacker.SpanTracks(RowSpan);
+}
+
+public class PhotoWallEditorViewModel
+{
+    public PhotoWallLayoutDto Layout { get; set; } = new();
+    public List<PhotoWallTileViewModel> Tiles { get; set; } = [];
+    public string ColumnTemplate { get; set; } = "";
+    public string RowTemplate { get; set; } = "";
+    public int ContentRowCount { get; set; } = 1;
+}
+
 
 public class PlantDashboardCardViewModel
 {
@@ -91,21 +126,6 @@ public class CreatePlantViewModel
     public string? City { get; set; }
 }
 
-public class ConfirmSpeciesViewModel
-{
-    public CreatePlantViewModel Draft { get; set; } = new();
-    public List<SpeciesCandidateItemViewModel> Candidates { get; set; } = [];
-    public int? SelectedIndex { get; set; }
-
-    [Display(Name = "手填學名再查")]
-    public string? ManualScientificName { get; set; }
-
-    public List<string> MismatchWarnings { get; set; } = [];
-
-    [Display(Name = "我知道環境不理想")]
-    public bool AcknowledgeMismatch { get; set; }
-}
-
 public class SpeciesCandidateItemViewModel
 {
     public string ScientificName { get; set; } = string.Empty;
@@ -114,10 +134,60 @@ public class SpeciesCandidateItemViewModel
     public string? Genus { get; set; }
     public string? Family { get; set; }
     public string? ImageUrl { get; set; }
+    public string? IdentificationHint { get; set; }
     public string? TaxonId { get; set; }
     public string Provider { get; set; } = string.Empty;
     public string SourceType { get; set; } = string.Empty;
     public string SourceId { get; set; } = string.Empty;
+}
+
+public class ConfirmSpeciesViewModel
+{
+    public CreatePlantViewModel Draft { get; set; } = new();
+    public List<SpeciesCandidateItemViewModel> Candidates { get; set; } = [];
+    public int? SelectedIndex { get; set; }
+
+    [Display(Name = "中文名再查")]
+    public string? ManualChineseName { get; set; }
+
+    [Display(Name = "進階：學名")]
+    public string? ManualScientificName { get; set; }
+
+    public List<string> MismatchWarnings { get; set; } = [];
+
+    [Display(Name = "我知道環境不理想")]
+    public bool AcknowledgeMismatch { get; set; }
+}
+
+public class ReselectSpeciesViewModel
+{
+    public Guid PlantId { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+
+    [Display(Name = "中文名")]
+    public string ChineseName { get; set; } = string.Empty;
+
+    public List<SpeciesCandidateItemViewModel> Candidates { get; set; } = [];
+    public int? SelectedIndex { get; set; }
+
+    [Display(Name = "進階：學名")]
+    public string? ManualScientificName { get; set; }
+
+    public Guid? SelectedPhotoId { get; set; }
+    public List<PlantPhotoPickItemViewModel> AvailablePhotos { get; set; } = [];
+
+    public List<string> MismatchWarnings { get; set; } = [];
+
+    [Display(Name = "我知道環境不理想")]
+    public bool AcknowledgeMismatch { get; set; }
+}
+
+public class PlantPhotoPickItemViewModel
+{
+    public Guid Id { get; set; }
+    public string Url { get; set; } = string.Empty;
+    public bool IsCover { get; set; }
+    public string? Note { get; set; }
 }
 
 public class EditPlantViewModel
@@ -143,26 +213,6 @@ public class EditPlantViewModel
 
     public string? SpeciesName { get; set; }
     public string? SpeciesScientificName { get; set; }
-}
-
-public class ReselectSpeciesViewModel
-{
-    public Guid PlantId { get; set; }
-    public string DisplayName { get; set; } = string.Empty;
-
-    [Display(Name = "中文名（搜尋用）")]
-    public string ChineseName { get; set; } = string.Empty;
-
-    public List<SpeciesCandidateItemViewModel> Candidates { get; set; } = [];
-    public int? SelectedIndex { get; set; }
-
-    [Display(Name = "手填學名再查")]
-    public string? ManualScientificName { get; set; }
-
-    public List<string> MismatchWarnings { get; set; } = [];
-
-    [Display(Name = "我知道環境不理想")]
-    public bool AcknowledgeMismatch { get; set; }
 }
 
 public class PlantDetailViewModel
@@ -252,7 +302,7 @@ public class PlantCareSuggestionsViewModel
 
 public class SyncKnowledgeViewModel
 {
-    [Display(Name = "物種搜尋關鍵字")]
+    [Display(Name = "物種關鍵字（中文名）")]
     public string SpeciesKeyword { get; set; } = string.Empty;
 }
 

@@ -32,6 +32,8 @@ public interface IExternalPlantApiService
 public interface IImageStorageService
 {
     Task<StoredImageResult> SaveAsync(Stream stream, string originalFileName, string contentType, Guid plantId, CancellationToken cancellationToken = default);
+    /// <summary>站點級媒體（如拼圖 Banner），不屬於任何一盆。</summary>
+    Task<StoredImageResult> SaveSiteMediaAsync(Stream stream, string originalFileName, string contentType, string relativeSubfolder, CancellationToken cancellationToken = default);
     string GetPublicPath(string storagePath);
 }
 

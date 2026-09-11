@@ -45,6 +45,54 @@ public class LocalImageStorageService : IImageStorageService
         };
     }
 
+    public async Task<StoredImageResult> SaveSiteMediaAsync(
+        Stream stream,
+        string originalFileName,
+        string contentType,
+        string relativeSubfolder,
+        CancellationToken cancellationToken = default)
+    {
+        var extension = Path.GetExtension(originalFileName);
+        if (string.IsNullOrWhiteSpace(extension))
+            extension = GuessExtension(contentType);
+        var fileName = $"{Guid.NewGuid():N}{extension}";
+        var safeFolder = (relativeSubfolder ?? "page-composer")
+            .Replace('\\', '/')
+            .Trim('/')
+            .Replace("..", "");
+        var relativeFolder = Path.Combine("uploads", safeFolder);
+        var absoluteFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativeFolder);
+        Directory.CreateDirectory(absoluteFolder);
+
+        var absolutePath = Path.Combine(absoluteFolder, fileName);
+        await using (var fileStream = File.Create(absolutePath))
+        {
+            await stream.CopyToAsync(fileStream, cancellationToken);
+        }
+
+        var relativePath = Path.Combine(relativeFolder, fileName).Replace('\\', '/');
+        var sha256 = await ComputeSha256Async(absolutePath, cancellationToken);
+
+        return new StoredImageResult
+        {
+            FileName = fileName,
+            StoragePath = relativePath,
+            ThumbnailPath = relativePath,
+            FileSize = new FileInfo(absolutePath).Length,
+            Sha256 = sha256
+        };
+    }
+
+    private static string GuessExtension(string contentType) =>
+        contentType?.ToLowerInvariant() switch
+        {
+            "image/jpeg" => ".jpg",
+            "image/png" => ".png",
+            "image/webp" => ".webp",
+            "image/gif" => ".gif",
+            _ => ".jpg"
+        };
+
     public string GetPublicPath(string storagePath) => $"/{storagePath.Replace('\\', '/')}";
 
     private static async Task<string> ComputeSha256Async(string absolutePath, CancellationToken cancellationToken)

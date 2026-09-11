@@ -1,0 +1,128 @@
+@model Midnight.EC.Plant.WEB.ViewModels.PhotoWallEditorViewModel
+
+@{
+    var layout = Model.Layout;
+    var colGaps = layout.ColGaps ?? [];
+    var rowGaps = layout.RowGaps ?? [];
+}
+
+@if (TempData["Error"] is string err)
+{
+    <div class="alert alert-warning m-3 mb-0">@err</div>
+}
+@if (TempData["Success"] is string ok)
+{
+    <div class="alert alert-success m-3 mb-0">@ok</div>
+}
+
+<script type="application/json" id="wall-layout-seed">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(layout))</script>
+
+<div class="wall-editor" id="wall-editor">
+    <div class="wall-editor-canvas">
+        <section class="photo-wall photo-wall-bleed" aria-label="編輯預覽">
+            <div class="photo-wall-grid photo-wall-grid-tracks is-editor-grid" id="wall-editor-grid"
+                 style="grid-template-columns: @Model.ColumnTemplate; grid-template-rows: @Model.RowTemplate;">
+                @foreach (var tile in Model.Tiles)
+                {
+                    var plant = tile.Plant;
+                    <article class="wall-tile is-editing"
+                             draggable="true"
+                             data-plant-id="@plant.Id"
+                             data-col-span="@tile.ColSpan"
+                             data-row-span="@tile.RowSpan"
+                             data-zoom="@tile.Zoom.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                             data-focus-x="@tile.FocusX.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                             data-focus-y="@tile.FocusY.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                             style="grid-column: @tile.GridColumnStart / span @tile.GridColumnSpan; grid-row: @tile.GridRowStart / span @tile.GridRowSpan; --zoom: @tile.Zoom.ToString(System.Globalization.CultureInfo.InvariantCulture); --focus-x: @tile.FocusX.ToString(System.Globalization.CultureInfo.InvariantCulture)%; --focus-y: @tile.FocusY.ToString(System.Globalization.CultureInfo.InvariantCulture)%;">
+                        <div class="wall-tile-link">
+                            <div class="wall-tile-media">
+                                @if (!string.IsNullOrWhiteSpace(plant.CoverImagePath))
+                                {
+                                    <img src="@plant.CoverImagePath" alt="@plant.DisplayName" loading="lazy" draggable="false" />
+                                }
+                                else
+                                {
+                                    <div class="wall-tile-placeholder">🌿</div>
+                                }
+                            </div>
+                            <div class="wall-tile-caption wall-tile-caption-editor">
+                                <h3 class="wall-tile-name">@plant.DisplayName</h3>
+                            </div>
+                        </div>
+                    </article>
+                }
+
+                @for (var i = 0; i < Math.Max(0, layout.Columns - 1); i++)
+                {
+                    <button type="button"
+                            class="wall-seam wall-seam-col"
+                            data-seam="col"
+                            data-index="@i"
+                            style="grid-column: @((i * 2) + 2); grid-row: 1 / -1;"
+                            title="直縫 @(i + 1)"
+                            aria-label="直縫 @(i + 1)"></button>
+                }
+                @for (var i = 0; i < Math.Max(0, Model.ContentRowCount - 1); i++)
+                {
+                    <button type="button"
+                            class="wall-seam wall-seam-row"
+                            data-seam="row"
+                            data-index="@i"
+                            style="grid-column: 1 / -1; grid-row: @((i * 2) + 2);"
+                            title="橫縫 @(i + 1)"
+                            aria-label="橫縫 @(i + 1)"></button>
+                }
+            </div>
+        </section>
+    </div>
+
+    <aside class="wall-editor-side">
+        <div>
+            <h1>照片牆版面</h1>
+            <p class="text-muted small mb-0">未選中：拖格排序。點選後：Alt+拖取景、滾輪縮放；再點一次取消選取。</p>
+        </div>
+
+        <div class="wall-editor-tools">
+            <div>
+                <label for="wall-gap-x">預設直縫（px）</label>
+                <input type="number" class="form-control form-control-sm" id="wall-gap-x" min="0" step="1" value="@layout.GapX" />
+            </div>
+            <div>
+                <label for="wall-gap-y">預設橫縫（px）</label>
+                <input type="number" class="form-control form-control-sm" id="wall-gap-y" min="0" step="1" value="@layout.GapY" />
+            </div>
+
+            <div id="wall-seam-tool" class="wall-seam-tool is-disabled">
+                <label for="wall-seam-gap"><span id="wall-seam-label">選中縫</span>（px）</label>
+                <input type="number" class="form-control form-control-sm" id="wall-seam-gap" min="0" step="1" value="14" disabled />
+            </div>
+
+            <div>
+                <label for="wall-col-span">選中格 · 寬（欄）</label>
+                <input type="number" class="form-control form-control-sm" id="wall-col-span" min="1" step="1" value="1" disabled />
+            </div>
+            <div>
+                <label for="wall-row-span">選中格 · 高（列）</label>
+                <input type="number" class="form-control form-control-sm" id="wall-row-span" min="1" step="1" value="1" disabled />
+            </div>
+            <div>
+                <label for="wall-zoom">選中格 · 縮放（倍）</label>
+                <input type="number" class="form-control form-control-sm" id="wall-zoom" min="0.01" step="0.05" value="1" disabled />
+            </div>
+            <p class="small text-muted mb-0">未選中拖格＝排序；選中後 Alt+拖＝框內取景，滾輪＝縮放（框內可裁切）。比例不合預設靠左下。</p>
+            <p class="small text-muted mb-0" id="wall-selected-name">尚未選取格子（直接拖格＝排序）</p>
+        </div>
+
+        <form asp-action="PhotoWall" method="post" id="wall-save-form" class="wall-editor-actions">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="layoutJson" id="wall-layout-json" />
+            <button type="submit" class="btn btn-plant-primary">儲存</button>
+            <a asp-action="Index" class="btn btn-outline-secondary">回設定</a>
+            <a asp-controller="Plant" asp-action="Index" class="btn btn-outline-secondary">看首頁</a>
+        </form>
+    </aside>
+</div>
+
+@section Scripts {
+    <script src="~/js/photo-wall-editor.js" asp-append-version="true"></script>
+}

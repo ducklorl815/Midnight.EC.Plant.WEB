@@ -1,0 +1,89 @@
+@model Midnight.EC.Plant.WEB.ViewModels.PageComposerEditorViewModel
+@using Midnight.EC.Plant.WEB.Models.Enums
+@using Midnight.EC.Plant.WEB.Models.Extensions
+
+@{
+    ViewData["Title"] = "首頁拼圖";
+    ViewData["WallEditor"] = true;
+    var layout = Model.Layout;
+    var seedPayload = new
+    {
+        layout.Version,
+        layout.Modules,
+        previewSlides = Model.CarouselSlidesByModuleId,
+        previewNotifications = Model.NotificationReminders,
+        photoCatalog = Model.PhotoCatalog,
+        uploadUrl = Url.Action("UploadPageComposerBanner", "Settings")
+    };
+}
+
+@if (TempData["Error"] is string err)
+{
+    <div class="alert alert-warning m-3 mb-0">@err</div>
+}
+@if (TempData["Success"] is string ok)
+{
+    <div class="alert alert-success m-3 mb-0">@ok</div>
+}
+
+<link rel="stylesheet" href="~/css/page-composer.css" asp-append-version="true" />
+
+<script type="application/json" id="pc-layout-seed">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(seedPayload, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } }))</script>
+
+<div class="pc-editor" id="pc-editor">
+    <aside class="pc-editor-side">
+        <div>
+            <h1>首頁拼圖</h1>
+            <p class="text-muted small mb-0">點選模組編輯細項；⠿ 拖移排序（也可 ↑↓）。Banner 固定頂部且必開。植栽細節牆可滑桿／預覽拖移調取景。</p>
+        </div>
+
+        <div>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong class="small">模組拼圖</strong>
+            </div>
+            <ul class="pc-module-list" id="pc-module-list" aria-label="模組列表"></ul>
+        </div>
+
+        <div id="pc-module-detail" class="pc-module-detail is-empty">
+            <p class="small text-muted mb-0" id="pc-detail-empty">點選上方模組以編輯細項。</p>
+            <div id="pc-detail-banner" class="pc-detail-banner d-none"></div>
+            <div id="pc-detail-carousel" class="pc-detail-carousel d-none">
+                <div class="fw-semibold small mb-2">輪播圖取景（此模組專用）</div>
+                <p class="small text-muted">選一張後：滑桿調縮放／左右／上下；預覽左圖直接拖移可改顯示位置。</p>
+                <div id="pc-frame-list" class="pc-frame-list"></div>
+            </div>
+        </div>
+
+        <div>
+            <label class="form-label small mb-1" for="pc-add-type">新增模組</label>
+            <div class="pc-add-row">
+                <select class="form-select form-select-sm" id="pc-add-type" style="flex:1;min-width:8rem;">
+                    @foreach (PageModuleType t in Enum.GetValues<PageModuleType>())
+                    {
+                        if (t == PageModuleType.Banner) { continue; }
+                        <option value="@t">@t.GetDisplayName()</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="pc-add-module">加入</button>
+            </div>
+        </div>
+
+        <form asp-action="PageComposer" method="post" id="pc-save-form" class="pc-editor-actions">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="layoutJson" id="pc-layout-json" />
+            <button type="submit" class="btn btn-plant-primary">儲存</button>
+            <a asp-action="Index" class="btn btn-outline-secondary">回設定</a>
+            <a asp-controller="Plant" asp-action="Index" class="btn btn-outline-secondary" target="_blank">看首頁</a>
+        </form>
+    </aside>
+
+    <div class="pc-editor-canvas">
+        <p class="small text-muted px-2 mb-2">即時預覽（僅啟用中的模組）</p>
+        <div id="pc-live-preview" aria-live="polite"></div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/page-composer-chrome.js" asp-append-version="true"></script>
+    <script src="~/js/page-composer-editor.js" asp-append-version="true"></script>
+}

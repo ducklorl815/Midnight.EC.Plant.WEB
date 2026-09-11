@@ -7,6 +7,7 @@ using Midnight.EC.Plant.WEB.Models.Extensions;
 using Midnight.EC.Plant.WEB.Models.External;
 using Midnight.EC.Plant.WEB.Services.External;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
+using Midnight.EC.Plant.WEB.Services.PageComposer;
 using Midnight.EC.Plant.WEB.Services.Plant;
 using Midnight.EC.Plant.WEB.Services.PlantAnalysis;
 using Midnight.EC.Plant.WEB.Services.PlantCare;
@@ -31,6 +32,8 @@ public class PlantController : Controller
     private readonly PlantReminderService _reminderService;
     private readonly PlantTimelineService _timelineService;
     private readonly PlantKnowledgeService _knowledgeService;
+    private readonly PageComposerHomeBuilder _pageComposerHomeBuilder;
+    private readonly CareGuideLayoutService _careGuideLayoutService;
     private readonly IImageStorageService _imageStorageService;
     private readonly ILogger<PlantController> _logger;
 
@@ -44,6 +47,8 @@ public class PlantController : Controller
         PlantReminderService reminderService,
         PlantTimelineService timelineService,
         PlantKnowledgeService knowledgeService,
+        PageComposerHomeBuilder pageComposerHomeBuilder,
+        CareGuideLayoutService careGuideLayoutService,
         IImageStorageService imageStorageService,
         ILogger<PlantController> logger)
     {
@@ -56,6 +61,8 @@ public class PlantController : Controller
         _reminderService = reminderService;
         _timelineService = timelineService;
         _knowledgeService = knowledgeService;
+        _pageComposerHomeBuilder = pageComposerHomeBuilder;
+        _careGuideLayoutService = careGuideLayoutService;
         _imageStorageService = imageStorageService;
         _logger = logger;
     }
@@ -63,33 +70,58 @@ public class PlantController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
-        var dashboard = await _reminderService.GetDashboardAsync(cancellationToken);
-        var cards = dashboard.Select(MapDashboardCard).ToList();
-
-        var overdue = cards
-            .Where(p => p.IsWateringOverdue)
-            .OrderByDescending(p => p.DaysSinceLastWatering ?? 0)
-            .ToList();
-        var missingDate = cards
-            .Where(p => p.MissingLastWateringDate)
-            .OrderBy(p => p.DisplayName)
-            .ToList();
-        var incomplete = cards
-            .Where(p => !p.MissingLastWateringDate && (p.KnowledgeIncomplete || p.EnvironmentIncomplete))
-            .OrderBy(p => p.DisplayName)
-            .ToList();
-
-        var model = new PlantListViewModel
+        ViewData["HomeChrome"] = true;
+        var (layout, slides, notifications) = await _pageComposerHomeBuilder.BuildAsync(cancellationToken);
+        return View(new PageComposerViewModel
         {
-            Plants = cards,
-            OverdueWatering = overdue,
-            MissingWateringDate = missingDate,
-            IncompleteData = incomplete,
-            TotalActiveReminders = dashboard.Sum(p => p.ActiveReminderCount),
-            TotalOverdueReminders = overdue.Count
-        };
+            Layout = layout,
+            IsEditorPreview = false,
+            CarouselSlidesByModuleId = slides,
+            NotificationReminders = notifications
+        });
+    }
 
-        return View(model);
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CompleteCareFromReminder(
+        Guid plantId,
+        Guid reminderId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var reminder = await _reminderService.GetActiveByPlantIdAsync(plantId, cancellationToken);
+            var target = reminder.FirstOrDefault(r => r.Id == reminderId && r.PlantId == plantId);
+            if (target == null)
+            {
+                TempData["Error"] = "找不到這則提醒。";
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (target.ReminderType is not (ReminderType.Watering or ReminderType.Fertilizing))
+            {
+                TempData["Error"] = "此提醒無法一鍵完成。";
+                return RedirectToAction(nameof(Index));
+            }
+
+            var careType = target.ReminderType == ReminderType.Watering
+                ? CareRecordType.Watering
+                : CareRecordType.Fertilizing;
+            var note = careType == CareRecordType.Watering
+                ? "通知提醒：已澆水"
+                : "通知提醒：已施肥";
+
+            await _careService.CreateAsync(plantId, DateTime.Today, careType, null, null, note, cancellationToken);
+            await _reminderService.SyncRemindersAsync(plantId, cancellationToken);
+            TempData["Success"] = careType == CareRecordType.Watering ? "已標記今日澆水。" : "已標記今日施肥。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "CompleteCareFromReminder failed for plant {PlantId} reminder {ReminderId}", plantId, reminderId);
+            TempData["Error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Index));
     }
 
     [HttpPost]
@@ -312,21 +344,31 @@ public class PlantController : Controller
             return RedirectToAction(nameof(Create));
         }
 
-        if (string.IsNullOrWhiteSpace(model.ManualScientificName))
+        var query = !string.IsNullOrWhiteSpace(model.ManualChineseName)
+            ? model.ManualChineseName.Trim()
+            : model.ManualScientificName?.Trim();
+
+        if (string.IsNullOrWhiteSpace(query))
         {
-            ModelState.AddModelError(nameof(model.ManualScientificName), "請輸入學名。");
+            ModelState.AddModelError(nameof(model.ManualChineseName), "請輸入中文名或學名。");
             model.Candidates ??= [];
             return View("ConfirmSpecies", model);
+        }
+
+        if (!string.IsNullOrWhiteSpace(model.ManualChineseName))
+        {
+            model.Draft.ChineseName = model.ManualChineseName.Trim();
         }
 
         IReadOnlyList<Midnight.EC.Plant.WEB.Models.External.ExternalSpeciesResult> candidates;
         try
         {
-            candidates = await _plantService.SearchSpeciesCandidatesAsync(model.ManualScientificName.Trim(), cancellationToken);
+            candidates = await _plantService.SearchSpeciesCandidatesAsync(query, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Manual scientific search failed");
+            _logger.LogWarning(ex, "Manual species search failed");
+            ModelState.AddModelError(string.Empty, ex.Message);
             candidates = [];
         }
 
@@ -334,7 +376,7 @@ public class PlantController : Controller
         model.SelectedIndex = model.Candidates.Count > 0 ? 0 : null;
         if (model.Candidates.Count == 0)
         {
-            ModelState.AddModelError(string.Empty, "學名查無候選，可改寫或先略過建檔。");
+            ModelState.AddModelError(string.Empty, "查無候選，可改寫中文名／學名後再試。");
         }
 
         return View("ConfirmSpecies", model);
@@ -430,6 +472,7 @@ public class PlantController : Controller
         Genus = c.Genus,
         Family = c.Family,
         ImageUrl = c.ImageUrl,
+        IdentificationHint = c.IdentificationHint,
         TaxonId = c.TaxonId,
         Provider = c.Provider,
         SourceType = c.SourceType,
@@ -444,6 +487,7 @@ public class PlantController : Controller
         Genus = c.Genus,
         Family = c.Family,
         ImageUrl = c.ImageUrl,
+        IdentificationHint = c.IdentificationHint,
         TaxonId = c.TaxonId,
         Provider = c.Provider,
         SourceType = c.SourceType,
@@ -543,26 +587,14 @@ public class PlantController : Controller
             ?? string.Empty;
         var displayName = !string.IsNullOrWhiteSpace(plant.NickName) ? plant.NickName! : plant.Name;
 
-        IReadOnlyList<Midnight.EC.Plant.WEB.Models.External.ExternalSpeciesResult> candidates;
-        try
-        {
-            candidates = string.IsNullOrWhiteSpace(chineseName)
-                ? []
-                : await _plantService.SearchSpeciesCandidatesAsync(chineseName, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Reselect species search failed for plant {PlantId}", id);
-            candidates = [];
-        }
-
         var model = new ReselectSpeciesViewModel
         {
             PlantId = id,
             DisplayName = displayName,
             ChineseName = chineseName,
-            Candidates = candidates.Select(MapCandidate).ToList(),
-            SelectedIndex = candidates.Count > 0 ? 0 : null
+            Candidates = [],
+            SelectedIndex = null,
+            AvailablePhotos = await LoadPhotoPicksAsync(id, cancellationToken)
         };
 
         return View(model);
@@ -577,31 +609,164 @@ public class PlantController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        if (string.IsNullOrWhiteSpace(model.ManualScientificName))
+        model.AvailablePhotos = await LoadPhotoPicksAsync(model.PlantId, cancellationToken);
+
+        var query = !string.IsNullOrWhiteSpace(model.ChineseName)
+            ? model.ChineseName.Trim()
+            : model.ManualScientificName?.Trim();
+
+        if (string.IsNullOrWhiteSpace(query))
         {
-            ModelState.AddModelError(nameof(model.ManualScientificName), "請輸入學名。");
+            ModelState.AddModelError(nameof(model.ChineseName), "請輸入中文名。");
             model.Candidates ??= [];
             return View("ReselectSpecies", model);
         }
 
+        // 進階學名優先（若有填）
+        if (!string.IsNullOrWhiteSpace(model.ManualScientificName))
+        {
+            query = model.ManualScientificName.Trim();
+        }
+
         try
         {
-            var candidates = await _plantService.SearchSpeciesCandidatesAsync(model.ManualScientificName.Trim(), cancellationToken);
-            model.Candidates = candidates.Select(MapCandidate).ToList();
+            var candidates = await _plantService.SearchSpeciesCandidatesAsync(query, cancellationToken);
+            model.Candidates = candidates.Select(c =>
+            {
+                var item = MapCandidate(c);
+                if (string.IsNullOrWhiteSpace(item.ChineseName) && CareGuideJson.HasCjk(model.ChineseName))
+                {
+                    item.ChineseName = model.ChineseName.Trim();
+                }
+
+                return item;
+            }).ToList();
             model.SelectedIndex = model.Candidates.Count > 0 ? 0 : null;
             if (model.Candidates.Count == 0)
             {
-                ModelState.AddModelError(string.Empty, "學名查無候選，可改寫後再試。");
+                ModelState.AddModelError(string.Empty, "查無候選，可改寫中文名或進階學名再試。");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Reselect scientific search failed");
+            _logger.LogWarning(ex, "Reselect search failed");
             ModelState.AddModelError(string.Empty, ex.Message);
             model.Candidates = [];
         }
 
         return View("ReselectSpecies", model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SearchReselectByPhoto(
+        ReselectSpeciesViewModel model,
+        IFormFile? photoUpload,
+        CancellationToken cancellationToken)
+    {
+        if (model.PlantId == Guid.Empty)
+        {
+            return RedirectToAction(nameof(Index));
+        }
+
+        model.AvailablePhotos = await LoadPhotoPicksAsync(model.PlantId, cancellationToken);
+
+        try
+        {
+            Stream? stream = null;
+            string fileName = "plant.jpg";
+            string? imageUrlForCards = null;
+
+            if (photoUpload is { Length: > 0 })
+            {
+                stream = photoUpload.OpenReadStream();
+                fileName = photoUpload.FileName;
+            }
+            else if (model.SelectedPhotoId is Guid photoId)
+            {
+                var photos = await _imageService.GetByPlantIdAsync(model.PlantId, cancellationToken);
+                var photo = photos.FirstOrDefault(p => p.Id == photoId);
+                if (photo == null)
+                {
+                    ModelState.AddModelError(string.Empty, "找不到選定的照片。");
+                    model.Candidates ??= [];
+                    return View("ReselectSpecies", model);
+                }
+
+                var absolute = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", photo.StoragePath);
+                if (!System.IO.File.Exists(absolute))
+                {
+                    ModelState.AddModelError(string.Empty, "照片檔案不存在。");
+                    model.Candidates ??= [];
+                    return View("ReselectSpecies", model);
+                }
+
+                stream = System.IO.File.OpenRead(absolute);
+                fileName = photo.OriginalFileName ?? photo.FileName;
+                imageUrlForCards = _imageStorageService.GetPublicPath(photo.StoragePath);
+            }
+            else
+            {
+                ModelState.AddModelError(string.Empty, "請上傳照片或選擇既有照片。");
+                model.Candidates ??= [];
+                return View("ReselectSpecies", model);
+            }
+
+            await using (stream)
+            {
+                var candidates = await _plantService.SearchSpeciesCandidatesByImageAsync(
+                    stream,
+                    fileName,
+                    string.IsNullOrWhiteSpace(model.ChineseName) ? null : model.ChineseName.Trim(),
+                    cancellationToken);
+
+                model.Candidates = candidates.Select(c =>
+                {
+                    var item = MapCandidate(c);
+                    if (string.IsNullOrWhiteSpace(item.ChineseName) && CareGuideJson.HasCjk(model.ChineseName))
+                    {
+                        item.ChineseName = model.ChineseName.Trim();
+                    }
+
+                    if (string.IsNullOrWhiteSpace(item.ImageUrl) && !string.IsNullOrWhiteSpace(imageUrlForCards))
+                    {
+                        item.ImageUrl = imageUrlForCards;
+                    }
+
+                    return item;
+                }).ToList();
+            }
+
+            model.SelectedIndex = model.Candidates.Count > 0 ? 0 : null;
+            if (model.Candidates.Count == 0)
+            {
+                ModelState.AddModelError(string.Empty, "照片無法辨識出候選，請換圖或改用中文找種。");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Reselect photo search failed");
+            ModelState.AddModelError(string.Empty, ex.Message);
+            model.Candidates = [];
+        }
+
+        return View("ReselectSpecies", model);
+    }
+
+    private async Task<List<PlantPhotoPickItemViewModel>> LoadPhotoPicksAsync(Guid plantId, CancellationToken cancellationToken)
+    {
+        var photos = await _imageService.GetByPlantIdAsync(plantId, cancellationToken);
+        return photos
+            .OrderByDescending(p => p.IsCover)
+            .ThenByDescending(p => p.CreateDate)
+            .Select(p => new PlantPhotoPickItemViewModel
+            {
+                Id = p.Id,
+                Url = _imageStorageService.GetPublicPath(p.StoragePath),
+                IsCover = p.IsCover,
+                Note = p.Note
+            })
+            .ToList();
     }
 
     [HttpPost]
@@ -619,6 +784,7 @@ public class PlantController : Controller
             model.SelectedIndex >= model.Candidates.Count)
         {
             ModelState.AddModelError(string.Empty, "請選擇一筆物種。");
+            model.AvailablePhotos = await LoadPhotoPicksAsync(model.PlantId, cancellationToken);
             return View("ReselectSpecies", model);
         }
 
@@ -627,7 +793,7 @@ public class PlantController : Controller
 
         try
         {
-            // 先確保知識以便比對落差
+            // 先確保知識以便比對落差（失敗則不換綁）
             var speciesId = await _plantService.EnsureSpeciesKnowledgeAsync(
                 external,
                 string.IsNullOrWhiteSpace(model.ChineseName) ? selected.ScientificName : model.ChineseName,
@@ -637,6 +803,7 @@ public class PlantController : Controller
             if (warnings.Count > 0 && !model.AcknowledgeMismatch)
             {
                 model.MismatchWarnings = warnings;
+                model.AvailablePhotos = await LoadPhotoPicksAsync(model.PlantId, cancellationToken);
                 ModelState.AddModelError(nameof(model.AcknowledgeMismatch), "實際環境與建議有落差，請勾選「我知道環境不理想」後再確認。");
                 return View("ReselectSpecies", model);
             }
@@ -674,6 +841,7 @@ public class PlantController : Controller
         {
             _logger.LogError(ex, "ConfirmReselectSpecies failed for {PlantId}", model.PlantId);
             ModelState.AddModelError(string.Empty, ex.Message);
+            model.AvailablePhotos = await LoadPhotoPicksAsync(model.PlantId, cancellationToken);
             return View("ReselectSpecies", model);
         }
     }
@@ -785,6 +953,7 @@ public class PlantController : Controller
             LogEntry = new TodayLogViewModel { LogDate = DateTime.Today }
         };
 
+        ViewBag.CareGuideSectionOrder = await _careGuideLayoutService.GetAsync(cancellationToken);
         return View(model);
     }
 
@@ -835,26 +1004,21 @@ public class PlantController : Controller
         switch (aiSupplement)
         {
             case Midnight.EC.Plant.WEB.Models.External.AiSupplementOutcome.Applied:
-                TempData["Success"] = "已從外部來源更新照護知識，並以 AI 補足缺漏欄位。";
+                TempData["Success"] = "已重新產生物種照護知識。";
                 break;
             case Midnight.EC.Plant.WEB.Models.External.AiSupplementOutcome.AppliedWithRemainingGaps:
-                TempData["Success"] = "已從外部來源更新照護知識。";
+                TempData["Success"] = "已重新產生照護知識。";
                 TempData["Warning"] = string.IsNullOrWhiteSpace(gapsText)
-                    ? "AI 已補足部分欄位，但仍有欄位空缺。"
+                    ? "仍有欄位空缺，可再試一次。"
                     : $"仍缺：{gapsText}";
                 break;
             case Midnight.EC.Plant.WEB.Models.External.AiSupplementOutcome.ServiceFailed:
-                TempData["Success"] = "已從外部來源更新照護知識。";
-                TempData["Warning"] = string.IsNullOrWhiteSpace(aiFailureReason)
-                    ? (string.IsNullOrWhiteSpace(gapsText)
-                        ? "外部同步已完成，但 AI 補足失敗，部分欄位可能未補齊。"
-                        : $"外部同步已完成，但 AI 補足失敗。仍缺：{gapsText}")
-                    : (string.IsNullOrWhiteSpace(gapsText)
-                        ? $"外部同步已完成，但 AI 補足失敗：{aiFailureReason}"
-                        : $"外部同步已完成，但 AI 補足失敗：{aiFailureReason}。仍缺：{gapsText}");
+                TempData["Error"] = string.IsNullOrWhiteSpace(aiFailureReason)
+                    ? "重新產生照護知識失敗。"
+                    : aiFailureReason;
                 break;
             default:
-                TempData["Success"] = "已從外部 API（Trefle / iNaturalist / GBIF / Wikipedia）更新植物知識。";
+                TempData["Success"] = "照護知識已更新。";
                 if (!string.IsNullOrWhiteSpace(gapsText))
                 {
                     TempData["Warning"] = $"仍缺：{gapsText}";

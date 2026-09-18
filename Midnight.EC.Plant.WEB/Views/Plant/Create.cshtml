@@ -46,16 +46,9 @@
                         <div class="form-text">預設勾選。取消則不會進入澆水待辦，直到你補上次澆水日。</div>
                     </div>
 
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label asp-for="StartDate" class="form-label"></label>
-                            <input asp-for="StartDate" class="form-control" type="date" />
-                        </div>
-                        <div class="col-md-6">
-                            <label asp-for="Location" class="form-label"></label>
-                            <input asp-for="Location" class="form-control" placeholder="例如：客廳窗台" />
-                            <div class="form-text">選填備註，與下方「實際環境」不同。</div>
-                        </div>
+                    <div class="mb-0">
+                        <label asp-for="StartDate" class="form-label"></label>
+                        <input asp-for="StartDate" class="form-control" type="date" style="max-width:16rem;" />
                     </div>
 
                     <div class="mb-0 mt-3">
@@ -162,4 +155,4 @@
         })();
     </script>
 }
-
+

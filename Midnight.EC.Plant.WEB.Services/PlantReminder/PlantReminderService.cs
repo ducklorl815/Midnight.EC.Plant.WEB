@@ -5,6 +5,7 @@ using Midnight.EC.Plant.WEB.Models.DTOs;
 using Midnight.EC.Plant.WEB.Models.Models;
 using Midnight.EC.Plant.WEB.Models.Enums;
 using Midnight.EC.Plant.WEB.Models.Extensions;
+using Midnight.EC.Plant.WEB.Models.External;
 using Midnight.EC.Plant.WEB.Models.Respository;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Utility.Json;
@@ -86,8 +87,11 @@ public class PlantReminderService
                 ?? InferWateringIntervalDays(plant.Species?.Knowledge?.WaterRequirement);
             var isOverdue = hasWatering && daysSinceWatering.HasValue && daysSinceWatering.Value >= interval;
             var knowledge = plant.Species?.Knowledge;
-            var suggestedLight = profile?.OverrideSuggestedLight ?? knowledge?.SuggestedLight
-                ?? LightLevelDisplay.TryParseFromText(knowledge?.LightRequirement);
+            var suggestedLight = CareKnowledgeCompleteness.ResolveSuggestedLight(
+                profile?.OverrideSuggestedLight ?? knowledge?.SuggestedLight,
+                knowledge?.LightRequirement,
+                knowledge?.CareSummary,
+                knowledge?.ExternalCareGuide);
             var knowledgeIncomplete = knowledge == null
                 || suggestedLight == null
                 || string.Equals(scientificName, "未確認", StringComparison.Ordinal);

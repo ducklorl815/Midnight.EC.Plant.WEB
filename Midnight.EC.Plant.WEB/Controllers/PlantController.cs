@@ -374,7 +374,6 @@ public class PlantController : Controller
     {
         ChineseName = model.ChineseName.Trim(),
         NickName = model.NickName.Trim(),
-        Location = model.Location,
         Description = model.Description,
         StartDate = model.StartDate,
         WateredToday = model.WateredToday,
@@ -405,7 +404,8 @@ public class PlantController : Controller
             return [];
         }
 
-        var suggestedLight = LightLevelDisplay.TryParseFromText(knowledge.LightRequirement);
+        var suggestedLight = knowledge.SuggestedLight
+            ?? LightLevelDisplay.TryParseFromText(knowledge.LightRequirement);
         var taboos = CareConstraintExtractor.ExtractTaboos(
             knowledge.LightRequirement,
             knowledge.WaterRequirement,
@@ -530,6 +530,185 @@ public class PlantController : Controller
     }
 
     [HttpGet]
+    public async Task<IActionResult> ReselectSpecies(Guid id, CancellationToken cancellationToken)
+    {
+        var plant = await _plantService.GetByIdAsync(id, cancellationToken);
+        if (plant == null)
+        {
+            return NotFound();
+        }
+
+        var chineseName = plant.Species?.ChineseName
+            ?? plant.Name
+            ?? string.Empty;
+        var displayName = !string.IsNullOrWhiteSpace(plant.NickName) ? plant.NickName! : plant.Name;
+
+        IReadOnlyList<Midnight.EC.Plant.WEB.Models.External.ExternalSpeciesResult> candidates;
+        try
+        {
+            candidates = string.IsNullOrWhiteSpace(chineseName)
+                ? []
+                : await _plantService.SearchSpeciesCandidatesAsync(chineseName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Reselect species search failed for plant {PlantId}", id);
+            candidates = [];
+        }
+
+        var model = new ReselectSpeciesViewModel
+        {
+            PlantId = id,
+            DisplayName = displayName,
+            ChineseName = chineseName,
+            Candidates = candidates.Select(MapCandidate).ToList(),
+            SelectedIndex = candidates.Count > 0 ? 0 : null
+        };
+
+        return View(model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SearchReselectByScientificName(ReselectSpeciesViewModel model, CancellationToken cancellationToken)
+    {
+        if (model.PlantId == Guid.Empty)
+        {
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (string.IsNullOrWhiteSpace(model.ManualScientificName))
+        {
+            ModelState.AddModelError(nameof(model.ManualScientificName), "請輸入學名。");
+            model.Candidates ??= [];
+            return View("ReselectSpecies", model);
+        }
+
+        try
+        {
+            var candidates = await _plantService.SearchSpeciesCandidatesAsync(model.ManualScientificName.Trim(), cancellationToken);
+            model.Candidates = candidates.Select(MapCandidate).ToList();
+            model.SelectedIndex = model.Candidates.Count > 0 ? 0 : null;
+            if (model.Candidates.Count == 0)
+            {
+                ModelState.AddModelError(string.Empty, "學名查無候選，可改寫後再試。");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Reselect scientific search failed");
+            ModelState.AddModelError(string.Empty, ex.Message);
+            model.Candidates = [];
+        }
+
+        return View("ReselectSpecies", model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfirmReselectSpecies(ReselectSpeciesViewModel model, CancellationToken cancellationToken)
+    {
+        if (model.PlantId == Guid.Empty)
+        {
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (model.SelectedIndex is null ||
+            model.Candidates == null ||
+            model.SelectedIndex < 0 ||
+            model.SelectedIndex >= model.Candidates.Count)
+        {
+            ModelState.AddModelError(string.Empty, "請選擇一筆物種。");
+            return View("ReselectSpecies", model);
+        }
+
+        var selected = model.Candidates[model.SelectedIndex.Value];
+        var external = ToExternal(selected);
+
+        try
+        {
+            // 先確保知識以便比對落差
+            var speciesId = await _plantService.EnsureSpeciesKnowledgeAsync(
+                external,
+                string.IsNullOrWhiteSpace(model.ChineseName) ? selected.ScientificName : model.ChineseName,
+                cancellationToken);
+
+            var warnings = await BuildPlantMismatchWarningsAsync(model.PlantId, speciesId, cancellationToken);
+            if (warnings.Count > 0 && !model.AcknowledgeMismatch)
+            {
+                model.MismatchWarnings = warnings;
+                ModelState.AddModelError(nameof(model.AcknowledgeMismatch), "實際環境與建議有落差，請勾選「我知道環境不理想」後再確認。");
+                return View("ReselectSpecies", model);
+            }
+
+            await _plantService.RebindSpeciesAsync(
+                model.PlantId,
+                external,
+                model.ChineseName,
+                cancellationToken);
+
+            if (warnings.Count > 0)
+            {
+                var profile = await _profileService.GetByPlantIdAsync(model.PlantId, cancellationToken);
+                if (profile != null)
+                {
+                    profile.EnvironmentMismatchAcknowledged = true;
+                    await _profileService.SaveAsync(model.PlantId, profile, cancellationToken);
+                }
+            }
+
+            var envFit = await _knowledgeService.RefreshEnvironmentAdviceAsync(model.PlantId, cancellationToken);
+            await _reminderService.SyncRemindersAsync(model.PlantId, cancellationToken);
+
+            TempData["Success"] = envFit.Succeeded
+                ? "已換綁物種，並同步知識與環境適配建議。"
+                : envFit.SkippedNoEnvironment
+                    ? "已換綁物種並同步知識。"
+                    : string.IsNullOrWhiteSpace(envFit.FailureReason)
+                        ? "已換綁物種並同步知識。"
+                        : $"已換綁物種並同步知識；環境適配建議失敗：{envFit.FailureReason}";
+
+            return RedirectToAction(nameof(Details), new { id = model.PlantId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ConfirmReselectSpecies failed for {PlantId}", model.PlantId);
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return View("ReselectSpecies", model);
+        }
+    }
+
+    private async Task<List<string>> BuildPlantMismatchWarningsAsync(
+        Guid plantId,
+        Guid speciesId,
+        CancellationToken cancellationToken)
+    {
+        var knowledge = await _knowledgeService.GetBySpeciesIdAsync(speciesId, cancellationToken);
+        var profile = await _profileService.GetByPlantIdAsync(plantId, cancellationToken);
+        if (knowledge == null || profile == null)
+        {
+            return [];
+        }
+
+        var suggestedLight = knowledge.SuggestedLight
+            ?? LightLevelDisplay.TryParseFromText(knowledge.LightRequirement);
+        var taboos = CareConstraintExtractor.ExtractTaboos(
+            knowledge.LightRequirement,
+            knowledge.WaterRequirement,
+            knowledge.SoilRequirement,
+            knowledge.CareSummary,
+            knowledge.ExternalCareGuide);
+
+        return CareConstraintExtractor.BuildMismatchWarnings(
+            suggestedLight,
+            profile.ActualLight,
+            taboos,
+            profile.HasRainCover,
+            profile.ActualPlacement,
+            profile.SubstrateType);
+    }
+
+    [HttpGet]
     public async Task<IActionResult> Details(Guid id, CancellationToken cancellationToken)
     {
         var plant = await _plantService.GetByIdAsync(id, cancellationToken);
@@ -631,7 +810,8 @@ public class PlantController : Controller
             var envFit = await _knowledgeService.RefreshEnvironmentAdviceAsync(id, cancellationToken);
 
             await _reminderService.SyncRemindersAsync(id, cancellationToken);
-            ApplySyncKnowledgeFlash(refresh.AiSupplement, refresh.AiFailureReason, envFit);
+            var remainingGaps = CareKnowledgeCompleteness.ListMissingFields(refresh.Knowledge);
+            ApplySyncKnowledgeFlash(refresh.AiSupplement, refresh.AiFailureReason, envFit, remainingGaps);
         }
         catch (Exception ex)
         {
@@ -645,8 +825,13 @@ public class PlantController : Controller
     private void ApplySyncKnowledgeFlash(
         Midnight.EC.Plant.WEB.Models.External.AiSupplementOutcome aiSupplement,
         string? aiFailureReason,
-        Midnight.EC.Plant.WEB.Models.External.EnvironmentFitResult envFit)
+        Midnight.EC.Plant.WEB.Models.External.EnvironmentFitResult envFit,
+        IReadOnlyList<string>? remainingGaps = null)
     {
+        var gapsText = remainingGaps is { Count: > 0 }
+            ? string.Join("、", remainingGaps)
+            : null;
+
         switch (aiSupplement)
         {
             case Midnight.EC.Plant.WEB.Models.External.AiSupplementOutcome.Applied:
@@ -654,16 +839,26 @@ public class PlantController : Controller
                 break;
             case Midnight.EC.Plant.WEB.Models.External.AiSupplementOutcome.AppliedWithRemainingGaps:
                 TempData["Success"] = "已從外部來源更新照護知識。";
-                TempData["Warning"] = "AI 已補足部分欄位，但仍有欄位空缺。";
+                TempData["Warning"] = string.IsNullOrWhiteSpace(gapsText)
+                    ? "AI 已補足部分欄位，但仍有欄位空缺。"
+                    : $"仍缺：{gapsText}";
                 break;
             case Midnight.EC.Plant.WEB.Models.External.AiSupplementOutcome.ServiceFailed:
                 TempData["Success"] = "已從外部來源更新照護知識。";
                 TempData["Warning"] = string.IsNullOrWhiteSpace(aiFailureReason)
-                    ? "外部同步已完成，但 AI 補足失敗，部分欄位可能未補齊。"
-                    : $"外部同步已完成，但 AI 補足失敗：{aiFailureReason}";
+                    ? (string.IsNullOrWhiteSpace(gapsText)
+                        ? "外部同步已完成，但 AI 補足失敗，部分欄位可能未補齊。"
+                        : $"外部同步已完成，但 AI 補足失敗。仍缺：{gapsText}")
+                    : (string.IsNullOrWhiteSpace(gapsText)
+                        ? $"外部同步已完成，但 AI 補足失敗：{aiFailureReason}"
+                        : $"外部同步已完成，但 AI 補足失敗：{aiFailureReason}。仍缺：{gapsText}");
                 break;
             default:
                 TempData["Success"] = "已從外部 API（Trefle / iNaturalist / GBIF / Wikipedia）更新植物知識。";
+                if (!string.IsNullOrWhiteSpace(gapsText))
+                {
+                    TempData["Warning"] = $"仍缺：{gapsText}";
+                }
                 break;
         }
 
@@ -1079,7 +1274,11 @@ public class PlantController : Controller
     {
         if (knowledge == null)
         {
-            return null;
+            return new PlantKnowledgeViewModel
+            {
+                MissingFields = ["光照", "建議日照", "澆水", "濕度", "溫度下限", "溫度上限", "土壤", "施肥", "生長季", "結構化照護指南"],
+                IsSparse = true
+            };
         }
 
         var externalCareGuide = ExternalCareGuideBuilder.SanitizeForDisplay(knowledge.ExternalCareGuide);
@@ -1100,6 +1299,12 @@ public class PlantController : Controller
 
         externalCareGuide = ExternalCareGuideBuilder.SanitizeForDisplay(externalCareGuide);
 
+        var suggestedLight = CareKnowledgeCompleteness.ResolveSuggestedLight(
+            knowledge.SuggestedLight,
+            knowledge.LightRequirement,
+            knowledge.CareSummary,
+            knowledge.ExternalCareGuide);
+
         var vm = new PlantKnowledgeViewModel
         {
             LightRequirement = knowledge.LightRequirement,
@@ -1108,8 +1313,11 @@ public class PlantController : Controller
             TemperatureRange = FormatTemperature(knowledge.TemperatureMin, knowledge.TemperatureMax),
             SoilRequirement = knowledge.SoilRequirement,
             FertilizerRequirement = knowledge.FertilizerRequirement,
+            GrowthSeason = knowledge.GrowthSeason,
             CareSummary = knowledge.CareSummary,
-            ExternalCareGuide = externalCareGuide
+            ExternalCareGuide = externalCareGuide,
+            SuggestedLight = suggestedLight,
+            MissingFields = CareKnowledgeCompleteness.ListMissingFields(knowledge).ToList()
         };
 
         vm.IsSparse = string.IsNullOrWhiteSpace(vm.LightRequirement)

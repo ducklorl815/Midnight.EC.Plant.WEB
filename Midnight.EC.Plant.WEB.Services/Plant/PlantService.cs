@@ -118,7 +118,8 @@ public class PlantService
         var species = await ResolveOrCreateSpeciesAsync(confirmedSpecies, chineseName.Trim(), cancellationToken);
         try
         {
-            await _plantKnowledgeService.SyncFromExternalAsync(species.ID, chineseName.Trim(), cancellationToken);
+            // 建檔／確保知識時一律強制同步，與詳情頁「同步外部」同格式（結構化 speciesGuide）
+            await _plantKnowledgeService.RefreshFromExternalAsync(species.ID, chineseName.Trim(), cancellationToken);
         }
         catch (Exception ex)
         {
@@ -156,6 +157,7 @@ public class PlantService
             species = await ResolveOrCreateSpeciesAsync(confirmedSpecies, chineseName, cancellationToken);
             try
             {
+                // 若上層已 Ensure／Refresh 過則跳過；否則首次寫入知識
                 await _plantKnowledgeService.SyncFromExternalAsync(species.ID, chineseName, cancellationToken);
             }
             catch (Exception ex)
@@ -213,6 +215,49 @@ public class PlantService
         _logger.LogInformation("Created plant {PlantId} species {SpeciesId} pending={Pending}",
             created.ID, created.SpeciesID, species.SourceType == "Pending");
         return created.ToDto();
+    }
+
+    public async Task<PlantDto> RebindSpeciesAsync(
+        Guid plantId,
+        ExternalSpeciesResult confirmedSpecies,
+        string? chineseNameHint,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(confirmedSpecies.ScientificName))
+        {
+            throw new InvalidOperationException("物種學名不可空白。");
+        }
+
+        var plant = await _plantRepository.GetByIdAsync(plantId, cancellationToken)
+            ?? throw new InvalidOperationException("找不到植物。");
+
+        var chineseName = !string.IsNullOrWhiteSpace(chineseNameHint)
+            ? chineseNameHint.Trim()
+            : (plant.Name ?? string.Empty);
+
+        var species = await ResolveOrCreateSpeciesAsync(confirmedSpecies, chineseName, cancellationToken);
+        try
+        {
+            // 上層 ConfirmReselect 已 Ensure／強制同步；此處僅補首次寫入
+            await _plantKnowledgeService.SyncFromExternalAsync(species.ID, chineseName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Knowledge sync failed for species {SpeciesId} during rebind", species.ID);
+        }
+
+        plant.SpeciesID = species.ID;
+        if (!string.IsNullOrWhiteSpace(chineseName))
+        {
+            plant.Name = chineseName;
+        }
+
+        plant.ModifyDate = DateTime.UtcNow;
+        await _plantRepository.UpdateAsync(plant, cancellationToken);
+
+        var updated = await _plantRepository.GetByIdWithDetailsAsync(plantId, cancellationToken)
+            ?? throw new InvalidOperationException("換綁物種後無法讀取資料。");
+        return updated.ToDto();
     }
 
     public async Task<PlantDto> UpdateAsync(

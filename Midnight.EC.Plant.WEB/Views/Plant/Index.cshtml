@@ -105,9 +105,15 @@ else
                 }
                 @foreach (var p in Model.IncompleteData)
                 {
+                    var preferEnvironment = p.EnvironmentIncomplete;
+                    var action = preferEnvironment ? "EditEnvironment" : "Details";
+                    var actionLabel = preferEnvironment
+                        ? "去補環境"
+                        : (p.KnowledgeIncomplete ? "去同步知識" : "去補齊");
+                    var fragment = preferEnvironment ? null : "sync-knowledge";
                     <div class="todo-fill-item">
                         <div>
-                            <a asp-action="EditEnvironment" asp-route-id="@p.Id" class="fw-semibold">@p.DisplayName</a>
+                            <a asp-action="@action" asp-route-id="@p.Id" asp-fragment="@fragment" class="fw-semibold">@p.DisplayName</a>
                             <div class="small text-muted mt-1">
                                 @if (p.KnowledgeIncomplete)
                                 {
@@ -119,7 +125,7 @@ else
                                 }
                             </div>
                         </div>
-                        <a asp-action="EditEnvironment" asp-route-id="@p.Id" class="btn btn-sm btn-outline-secondary">去補環境</a>
+                        <a asp-action="@action" asp-route-id="@p.Id" asp-fragment="@fragment" class="btn btn-sm btn-outline-secondary">@actionLabel</a>
                     </div>
                 }
             </div>
@@ -158,16 +164,20 @@ else
                         </div>
                         <div class="wall-tile-caption">
                             <h3 class="wall-tile-name">@plant.DisplayName</h3>
-                            <div class="wall-tile-status">
-                                @if (plant.DaysSinceLastWatering.HasValue)
-                                {
-                                    <text>已經 @plant.DaysSinceLastWatering 天沒澆</text>
-                                }
-                                else
-                                {
-                                    <text>尚無澆水紀錄</text>
-                                }
-                            </div>
+                            @if (plant.IsWateringOverdue && plant.DaysSinceLastWatering.HasValue)
+                            {
+                                var overdueDays = plant.DaysSinceLastWatering.Value - plant.WateringIntervalDays;
+                                <div class="wall-tile-status">
+                                    @if (overdueDays > 0)
+                                    {
+                                        <text>已逾期 @overdueDays 天</text>
+                                    }
+                                    else
+                                    {
+                                        <text>已到澆水日</text>
+                                    }
+                                </div>
+                            }
                         </div>
                     </a>
                 </article>

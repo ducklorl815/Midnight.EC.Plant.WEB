@@ -1,4 +1,5 @@
 @model Midnight.EC.Plant.WEB.ViewModels.PlantDetailViewModel
+@using Midnight.EC.Plant.WEB.Models.AI
 @using Midnight.EC.Plant.WEB.Models.External
 @{
     ViewData["Title"] = Model.DisplayName;
@@ -222,26 +223,27 @@
                                             </span>
                                         }
                                     </div>
-                                    <p class="small mb-0">@photo.LatestAnalysis.Summary</p>
                                     @{
-                                        FertilizerRecipeDto? photoFert = null;
+                                        PlantAnalysisResultDto? parsedAnalysis = null;
                                         if (!string.IsNullOrWhiteSpace(photo.LatestAnalysis.ResultJson))
                                         {
-                                            var parsedAnalysis = Midnight.EC.Plant.WEB.Utility.Json.JsonHelper.Deserialize<Midnight.EC.Plant.WEB.Models.AI.PlantAnalysisResultDto>(photo.LatestAnalysis.ResultJson);
-                                            photoFert = parsedAnalysis?.FertilizerAdvice;
+                                            parsedAnalysis = Midnight.EC.Plant.WEB.Utility.Json.JsonHelper.Deserialize<PlantAnalysisResultDto>(photo.LatestAnalysis.ResultJson);
                                         }
                                     }
-                                    @if (photoFert != null)
+                                    @if (parsedAnalysis != null)
                                     {
-                                        ViewBag.FertilizerBlockTitle = "施肥建議（可製作水肥）";
-                                        @await Html.PartialAsync("_FertilizerRecipeGuide", photoFert)
+                                        @await Html.PartialAsync("_AiAnalysisDiagnosis", parsedAnalysis)
                                     }
-                                    else if (!string.IsNullOrWhiteSpace(photo.LatestAnalysis.FertilizerAdviceText))
+                                    else
                                     {
-                                        <div class="fertilizer-recipe mt-2">
-                                            <div class="fertilizer-recipe-title">施肥建議</div>
-                                            <div class="small mb-0">@photo.LatestAnalysis.FertilizerAdviceText</div>
-                                        </div>
+                                        <p class="small mb-0">@photo.LatestAnalysis.Summary</p>
+                                        @if (!string.IsNullOrWhiteSpace(photo.LatestAnalysis.FertilizerAdviceText))
+                                        {
+                                            <div class="ai-diag-block mt-2">
+                                                <div class="ai-diag-title">與本次相關的施肥建議</div>
+                                                <div class="small mb-0">@photo.LatestAnalysis.FertilizerAdviceText</div>
+                                            </div>
+                                        }
                                     }
                                 </div>
                             }
@@ -314,35 +316,83 @@
                     ViewBag.LegacyCareGuide = speciesGuide == null ? Model.Knowledge?.ExternalCareGuide : null;
                     var suggestedDays = Model.CareSuggestions.SuggestedWateringIntervalDays;
                     var myDays = Model.Profile.WateringIntervalDays;
+                    var missing = Model.Knowledge?.MissingFields ?? [];
+                    bool Miss(string label) => missing.Contains(label);
                 }
+
+                @if (missing.Count > 0)
+                {
+                    <div class="alert alert-danger knowledge-gaps mb-3" role="status">
+                        <div class="fw-semibold mb-1">知識欄位未齊</div>
+                        <p class="small mb-2 mb-md-2">下列欄位仍空，可於右側「同步外部 API」補齊：</p>
+                        <ul class="knowledge-gap-list mb-0">
+                            @foreach (var field in missing)
+                            {
+                                <li>@field</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
                 <div class="care-facts mb-3">
+                    <div class="@(Miss("建議日照") ? "care-fact-missing" : null)">
+                        <span>建議日照</span>
+                        @(Model.Knowledge?.SuggestedLight.HasValue == true
+                            ? Model.Knowledge.SuggestedLightLabel
+                            : "未設定")
+                    </div>
+                    <div class="@(Miss("光照") ? "care-fact-missing" : null)">
+                        <span>光照</span>
+                        @(string.IsNullOrWhiteSpace(Model.Knowledge?.LightRequirement) ? "未設定" : Model.Knowledge!.LightRequirement)
+                    </div>
                     @if (suggestedDays.HasValue)
                     {
                         <div><span>建議澆水</span>每 @suggestedDays 天</div>
                     }
-                    else if (!string.IsNullOrWhiteSpace(Model.Knowledge?.WaterRequirement))
+                    else
                     {
-                        <div><span>澆水</span>@Model.Knowledge.WaterRequirement</div>
+                        <div class="@(Miss("澆水") ? "care-fact-missing" : null)">
+                            <span>澆水</span>
+                            @(string.IsNullOrWhiteSpace(Model.Knowledge?.WaterRequirement) ? "未設定" : Model.Knowledge!.WaterRequirement)
+                        </div>
                     }
+                    <div class="@(Miss("濕度") ? "care-fact-missing" : null)">
+                        <span>濕度</span>
+                        @(string.IsNullOrWhiteSpace(Model.Knowledge?.HumidityRequirement) ? "未設定" : Model.Knowledge!.HumidityRequirement)
+                    </div>
+                    <div class="@((Miss("溫度下限") || Miss("溫度上限")) ? "care-fact-missing" : null)">
+                        <span>溫度</span>
+                        @(string.IsNullOrWhiteSpace(Model.Knowledge?.TemperatureRange) ? "未設定" : Model.Knowledge!.TemperatureRange)
+                    </div>
+                    <div class="@(Miss("土壤") ? "care-fact-missing" : null)">
+                        <span>土壤</span>
+                        @(string.IsNullOrWhiteSpace(Model.Knowledge?.SoilRequirement) ? "未設定" : Model.Knowledge!.SoilRequirement)
+                    </div>
+                    <div class="@(Miss("施肥") ? "care-fact-missing" : null)">
+                        <span>施肥</span>
+                        @(string.IsNullOrWhiteSpace(Model.Knowledge?.FertilizerRequirement) ? "未設定" : Model.Knowledge!.FertilizerRequirement)
+                    </div>
+                    <div class="@(Miss("生長季") ? "care-fact-missing" : null)">
+                        <span>生長季</span>
+                        @(string.IsNullOrWhiteSpace(Model.Knowledge?.GrowthSeason) ? "未設定" : Model.Knowledge!.GrowthSeason)
+                    </div>
                     @if (myDays.HasValue)
                     {
-                        <div><span>我的澆水週期</span>每 @myDays 天</div>
+                        <div><span>我的週期</span>每 @myDays 天</div>
                     }
                 </div>
 
-                @if (speciesGuide != null || !string.IsNullOrWhiteSpace(Model.Knowledge?.ExternalCareGuide))
+                @if (Miss("結構化照護指南"))
+                {
+                    <div class="care-fact-missing rounded px-3 py-2 mb-3">結構化照護指南：未設定（同步後應出現摘要與施肥配方）</div>
+                }
+                else if (speciesGuide != null || !string.IsNullOrWhiteSpace(Model.Knowledge?.ExternalCareGuide))
                 {
                     @await Html.PartialAsync("_SpeciesCareGuide", speciesGuide)
                 }
                 else if (Model.Knowledge != null && !Model.Knowledge.IsSparse)
                 {
-                    <div class="care-facts">
-                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.LightRequirement)) { <div><span>光照</span>@Model.Knowledge.LightRequirement</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.WaterRequirement) && !suggestedDays.HasValue) { <div><span>澆水</span>@Model.Knowledge.WaterRequirement</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.SoilRequirement)) { <div><span>土壤</span>@Model.Knowledge.SoilRequirement</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.FertilizerRequirement)) { <div><span>施肥</span>@Model.Knowledge.FertilizerRequirement</div> }
-                        @if (!string.IsNullOrWhiteSpace(Model.Knowledge.TemperatureRange)) { <div><span>溫度</span>@Model.Knowledge.TemperatureRange</div> }
-                    </div>
+                    <p class="text-muted small">已有部分欄位，請同步以產生結構化照護說明。</p>
                 }
                 else
                 {
@@ -366,10 +416,16 @@
     </div>
 
     <div class="col-lg-5">
-        <p class="section-label">進階</p>
+        <p class="section-label" id="sync-knowledge">進階</p>
         <section class="panel mb-4">
             <div class="panel-header"><strong>同步官方資料</strong></div>
             <div class="panel-body">
+                @if (Model.Knowledge?.HasMissingFields == true)
+                {
+                    <div class="small text-danger mb-2">
+                        目前仍缺：@string.Join("、", Model.Knowledge.MissingFields)
+                    </div>
+                }
                 <form asp-action="SyncKnowledge" asp-route-id="@Model.Id" method="post">
                     @Html.AntiForgeryToken()
                     <label asp-for="SyncKnowledge.SpeciesKeyword" class="form-label"></label>

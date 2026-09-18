@@ -54,6 +54,7 @@ public static class EntityMappingExtensions
         DiseaseProblems = entity.DiseaseProblems,
         CareSummary = entity.CareSummary,
         ExternalCareGuide = entity.ExternalCareGuide,
+        SuggestedLight = entity.SuggestedLight,
         SourceUpdatedAt = entity.SourceUpdatedAt,
         DataVersion = entity.DataVersion
     };

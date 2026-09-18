@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Midnight.EC.Plant.WEB.Services")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cac73a356559ea03b3533899712797cfc32ce8b5")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+81103f8d12ed86d70f8411dda818e61f2051e033")]
 [assembly: System.Reflection.AssemblyProductAttribute("Midnight.EC.Plant.WEB.Services")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Midnight.EC.Plant.WEB.Services")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

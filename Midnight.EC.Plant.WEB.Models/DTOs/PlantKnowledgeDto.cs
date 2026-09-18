@@ -19,6 +19,7 @@ public class PlantKnowledgeDto
     public string? DiseaseProblems { get; set; }
     public string? CareSummary { get; set; }
     public string? ExternalCareGuide { get; set; }
+    public Midnight.EC.Plant.WEB.Models.Enums.LightLevel? SuggestedLight { get; set; }
     public DateTime? SourceUpdatedAt { get; set; }
     public int DataVersion { get; set; }
 }

@@ -59,9 +59,6 @@ public class CreatePlantViewModel
     [Display(Name = "今天已澆水")]
     public bool WateredToday { get; set; } = true;
 
-    [Display(Name = "位置備註（選填）")]
-    public string? Location { get; set; }
-
     [Display(Name = "備註")]
     public string? Description { get; set; }
 
@@ -134,7 +131,7 @@ public class EditPlantViewModel
     [Display(Name = "暱稱")]
     public string? NickName { get; set; }
 
-    [Display(Name = "位置")]
+    [Display(Name = "位置備註")]
     public string? Location { get; set; }
 
     [Display(Name = "備註")]
@@ -146,6 +143,26 @@ public class EditPlantViewModel
 
     public string? SpeciesName { get; set; }
     public string? SpeciesScientificName { get; set; }
+}
+
+public class ReselectSpeciesViewModel
+{
+    public Guid PlantId { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+
+    [Display(Name = "中文名（搜尋用）")]
+    public string ChineseName { get; set; } = string.Empty;
+
+    public List<SpeciesCandidateItemViewModel> Candidates { get; set; } = [];
+    public int? SelectedIndex { get; set; }
+
+    [Display(Name = "手填學名再查")]
+    public string? ManualScientificName { get; set; }
+
+    public List<string> MismatchWarnings { get; set; } = [];
+
+    [Display(Name = "我知道環境不理想")]
+    public bool AcknowledgeMismatch { get; set; }
 }
 
 public class PlantDetailViewModel
@@ -210,8 +227,13 @@ public class PlantKnowledgeViewModel
     public string? TemperatureRange { get; set; }
     public string? SoilRequirement { get; set; }
     public string? FertilizerRequirement { get; set; }
+    public string? GrowthSeason { get; set; }
     public string? CareSummary { get; set; }
     public string? ExternalCareGuide { get; set; }
+    public LightLevel? SuggestedLight { get; set; }
+    public string? SuggestedLightLabel => LightLevelDisplay.ToLabel(SuggestedLight);
+    public List<string> MissingFields { get; set; } = [];
+    public bool HasMissingFields => MissingFields.Count > 0;
     public bool IsSparse { get; set; }
 }
 

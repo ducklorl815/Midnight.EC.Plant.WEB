@@ -11,7 +11,7 @@ namespace Midnight.EC.Plant.WEB.Services.AI;
 
 public class CareKnowledgeSynthesisService : ICareKnowledgeSynthesisService
 {
-    public const string PromptVersion = "care-synthesis-v4";
+    public const string PromptVersion = "care-synthesis-v5";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly AiOptions _options;
@@ -63,7 +63,7 @@ public class CareKnowledgeSynthesisService : ICareKnowledgeSynthesisService
                             根據學名與外部來源，輸出 JSON。欄位名用英文；所有給使用者讀的字串值用繁體中文（台灣用字），禁止簡體。
                             temperatureMin、temperatureMax 必須是 JSON 數字。
                             必填輸出：
-                            lightRequirement, waterRequirement, humidityRequirement,
+                            lightRequirement, suggestedLight, waterRequirement, humidityRequirement,
                             temperatureMin, temperatureMax, soilRequirement, fertilizerRequirement,
                             growthSeason, careSummary,
                             speciesGuide: {
@@ -72,6 +72,8 @@ public class CareKnowledgeSynthesisService : ICareKnowledgeSynthesisService
                             }
                             【命名】scientificName 填拉丁學名。chineseName 只能填「使用者輸入的中文名」；不可自行翻譯或改用其他俗名（例如使用者寫小豆樹就不可改成珍珠樹）。若使用者未提供中文名，chineseName 留空。
                             summary 請以學名起述（可附使用者中文名），不要使用未經確認的中文俗名。
+                            suggestedLight 必須是下列英文枚舉之一（對應建議日照四檔）：None（無日照／陰處）、Diffuse（散射）、HalfDay（半日）、FullSun（烈日）。
+                            lightRequirement 用繁中短句描述；suggestedLight 與 lightRequirement 語意一致。
                             speciesGuide.fertilizer 必須給可執行水肥建議：
                             - type：肥種（如平衡液肥）
                             - npkHint：如 20-20-20
@@ -202,7 +204,24 @@ public class CareKnowledgeSynthesisService : ICareKnowledgeSynthesisService
             GrowthSeason = NullIfEmpty(GetString(root, "growthSeason")),
             CareSummary = NullIfEmpty(GetString(root, "careSummary")),
             ExternalCareGuide = externalCareGuide,
+            SuggestedLight = ParseSuggestedLight(root),
             Provider = $"AI-{PromptVersion}"
+        };
+    }
+
+    private static Midnight.EC.Plant.WEB.Models.Enums.LightLevel? ParseSuggestedLight(JsonElement root)
+    {
+        if (!TryGetPropertyIgnoreCase(root, "suggestedLight", out var el))
+        {
+            return null;
+        }
+
+        return el.ValueKind switch
+        {
+            JsonValueKind.String => Midnight.EC.Plant.WEB.Models.Enums.LightLevelDisplay.TryParseSuggestedLightToken(el.GetString()),
+            JsonValueKind.Number when el.TryGetInt32(out var n)
+                => Midnight.EC.Plant.WEB.Models.Enums.LightLevelDisplay.TryParseSuggestedLightToken(n.ToString()),
+            _ => Midnight.EC.Plant.WEB.Models.Enums.LightLevelDisplay.TryParseSuggestedLightToken(el.ToString())
         };
     }
 
@@ -592,6 +611,7 @@ public class CareKnowledgeSynthesisService : ICareKnowledgeSynthesisService
         sb.AppendLine($"- 外部照護指南：{merged.ExternalCareGuide}");
         sb.AppendLine($"- 摘要：{merged.CareSummary}");
         sb.AppendLine("請補齊缺失的照護欄位，並產出 speciesGuide（含施肥配方 type／dilution／frequency）；全文繁體中文。");
+        sb.AppendLine("suggestedLight 必填：None / Diffuse / HalfDay / FullSun 其一。");
         sb.AppendLine("temperatureMin / temperatureMax 必須是純數字（例如 10 或 28），不可寫字串或單位。");
         return sb.ToString();
     }

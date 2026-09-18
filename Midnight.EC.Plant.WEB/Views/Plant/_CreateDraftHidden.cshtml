@@ -3,7 +3,6 @@
 <input type="hidden" name="Draft.NickName" value="@Model.NickName" />
 <input type="hidden" name="Draft.ChineseName" value="@Model.ChineseName" />
 <input type="hidden" name="Draft.WateredToday" value="@(Model.WateredToday ? "true" : "false")" />
-<input type="hidden" name="Draft.Location" value="@Model.Location" />
 <input type="hidden" name="Draft.Description" value="@Model.Description" />
 <input type="hidden" name="Draft.StartDate" value="@(Model.StartDate?.ToString("yyyy-MM-dd"))" />
 <input type="hidden" name="Draft.ActualPlacement" value="@((int?)Model.ActualPlacement)" />
@@ -12,4 +11,4 @@
 <input type="hidden" name="Draft.SubstrateType" value="@Model.SubstrateType" />
 <input type="hidden" name="Draft.SaucerState" value="@((int?)Model.SaucerState)" />
 <input type="hidden" name="Draft.City" value="@Model.City" />
-
+

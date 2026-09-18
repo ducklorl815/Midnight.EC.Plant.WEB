@@ -447,6 +447,7 @@ public class PlantKnowledgeService
             GrowthSeason = external.GrowthSeason,
             CareSummary = external.CareSummary,
             ExternalCareGuide = external.ExternalCareGuide,
+            SuggestedLight = external.SuggestedLight,
             SourceUpdatedAt = now,
             DataVersion = 1,
             UpdatedAt = now
@@ -457,7 +458,8 @@ public class PlantKnowledgeService
 
     private static void ApplyStructuredConstraints(Midnight.EC.Plant.WEB.Models.Models.PlantKnowledgeModel knowledge)
     {
-        knowledge.SuggestedLight = LightLevelDisplay.TryParseFromText(knowledge.LightRequirement)
+        knowledge.SuggestedLight = knowledge.SuggestedLight
+            ?? LightLevelDisplay.TryParseFromText(knowledge.LightRequirement)
             ?? LightLevelDisplay.TryParseFromText(knowledge.CareSummary)
             ?? LightLevelDisplay.TryParseFromText(knowledge.ExternalCareGuide);
 
@@ -482,6 +484,7 @@ public class PlantKnowledgeService
         target.GrowthSeason = Coalesce(target.GrowthSeason, partial.GrowthSeason);
         target.TemperatureMin ??= partial.TemperatureMin;
         target.TemperatureMax ??= partial.TemperatureMax;
+        target.SuggestedLight ??= partial.SuggestedLight;
 
         if (!string.IsNullOrWhiteSpace(partial.CareSummary))
         {
@@ -503,6 +506,11 @@ public class PlantKnowledgeService
         target.GrowthSeason = Coalesce(target.GrowthSeason, external.GrowthSeason);
         target.TemperatureMin ??= external.TemperatureMin;
         target.TemperatureMax ??= external.TemperatureMax;
+        // 同步重產：AI／外部給的建議日照可覆寫舊值（解析失敗殘留）
+        if (external.SuggestedLight.HasValue)
+        {
+            target.SuggestedLight = external.SuggestedLight;
+        }
 
         if (!string.IsNullOrWhiteSpace(external.CareSummary))
         {
@@ -529,6 +537,7 @@ public class PlantKnowledgeService
         target.GrowthSeason = Coalesce(target.GrowthSeason, partial.GrowthSeason);
         target.TemperatureMin ??= partial.TemperatureMin;
         target.TemperatureMax ??= partial.TemperatureMax;
+        target.SuggestedLight ??= partial.SuggestedLight;
         if (!string.IsNullOrWhiteSpace(partial.CareSummary))
         {
             target.CareSummary = string.IsNullOrWhiteSpace(target.CareSummary)

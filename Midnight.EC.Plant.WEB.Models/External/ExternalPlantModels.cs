@@ -1,3 +1,5 @@
+using Midnight.EC.Plant.WEB.Models.Enums;
+
 namespace Midnight.EC.Plant.WEB.Models.External;
 
 public class ExternalSpeciesResult
@@ -26,6 +28,7 @@ public class ExternalKnowledgeResult
     public string? GrowthSeason { get; set; }
     public string? CareSummary { get; set; }
     public string? ExternalCareGuide { get; set; }
+    public LightLevel? SuggestedLight { get; set; }
     public string Provider { get; set; } = string.Empty;
 }
 
@@ -74,5 +77,6 @@ public class ExternalKnowledgePartial
     public string? GrowthSeason { get; set; }
     public string? CareSummary { get; set; }
     public string? ExternalCareGuide { get; set; }
+    public LightLevel? SuggestedLight { get; set; }
     public string Provider { get; set; } = string.Empty;
 }

@@ -36,6 +36,7 @@ public static class DbParams
             "SpeciesId" when names.Contains("SpeciesID") => true,
             "DiaryId" when names.Contains("DiaryID") => true,
             "ImageId" when names.Contains("ImageID") => true,
+            "OriginalPhotoId" when names.Contains("OriginalPhotoID") => true,
             "AnalysisId" when names.Contains("AnalysisID") => true,
             "SourceId" when names.Contains("SourceID") => true,
             "CreatedAt" or "UpdatedAt" or "IsActive" => true,

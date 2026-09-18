@@ -6,7 +6,6 @@ using Midnight.EC.Plant.WEB.Models.Enums;
 using Midnight.EC.Plant.WEB.Models.Extensions;
 using Midnight.EC.Plant.WEB.Models.Respository;
 using Midnight.EC.Plant.WEB.Services.AI;
-using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Utility.Json;
 
 namespace Midnight.EC.Plant.WEB.Services.PlantAnalysis;
@@ -21,6 +20,7 @@ public class PlantAnalysisService
     private readonly PlantSourceRespo _sourceRepository;
     private readonly PlantCareRecordRespo _careRepository;
     private readonly PlantProfileRespo _profileRepository;
+    private readonly OpenAIPlantAgentService _plantAgent;
     private readonly ILogger<PlantAnalysisService> _logger;
 
     public PlantAnalysisService(
@@ -32,6 +32,7 @@ public class PlantAnalysisService
         PlantSourceRespo sourceRepository,
         PlantCareRecordRespo careRepository,
         PlantProfileRespo profileRepository,
+        OpenAIPlantAgentService plantAgent,
         ILogger<PlantAnalysisService> logger)
     {
         _analysisRepository = analysisRepository;
@@ -42,6 +43,7 @@ public class PlantAnalysisService
         _sourceRepository = sourceRepository;
         _careRepository = careRepository;
         _profileRepository = profileRepository;
+        _plantAgent = plantAgent;
         _logger = logger;
     }
 
@@ -95,7 +97,7 @@ public class PlantAnalysisService
         return job?.ToDto();
     }
 
-    public async Task ProcessJobAsync(Guid jobId, IAIAgentService aiAgentService, CancellationToken cancellationToken = default)
+    public async Task ProcessJobAsync(Guid jobId, CancellationToken cancellationToken = default)
     {
         var job = await _jobRepository.GetByIdAsync(jobId, cancellationToken)
             ?? throw new InvalidOperationException("找不到分析工作。");
@@ -111,7 +113,7 @@ public class PlantAnalysisService
         try
         {
             var context = await BuildContextAsync(job, cancellationToken);
-            var result = await aiAgentService.AnalyzePlantAsync(context, cancellationToken);
+            var result = await _plantAgent.AnalyzePlantAsync(context, cancellationToken);
             var resultJson = JsonHelper.Serialize(result);
 
             var analysis = new Midnight.EC.Plant.WEB.Models.Models.PlantAnalysisModel

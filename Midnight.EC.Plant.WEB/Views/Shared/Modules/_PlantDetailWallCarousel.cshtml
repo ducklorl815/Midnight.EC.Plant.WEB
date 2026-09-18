@@ -1,9 +1,12 @@
 @model Midnight.EC.Plant.WEB.Models.DTOs.PageComposerModuleDto
-@using System.Globalization
+@using System.Linq
 @{
     var slidesByModule = ViewData["CarouselSlides"] as Dictionary<string, List<Midnight.EC.Plant.WEB.Models.DTOs.PlantDetailWallSlideDto>>
         ?? new Dictionary<string, List<Midnight.EC.Plant.WEB.Models.DTOs.PlantDetailWallSlideDto>>();
     slidesByModule.TryGetValue(Model.Id, out var slides);
+    // 若模組 Id 對不到（大小寫／舊資料），退回任一細節牆投影片組，避免首頁空白
+    if (slides == null || slides.Count == 0)
+        slides = slidesByModule.Values.FirstOrDefault(v => v != null && v.Count > 0);
     slides ??= [];
     if (slides.Count == 0)
     {
@@ -28,85 +31,86 @@
             }
         ];
     }
-    var inv = CultureInfo.InvariantCulture;
 }
 
 <section class="pc-module pc-detail-wall" data-module-type="@Model.Type" aria-label="植栽細節牆">
-    <div class="pc-detail-wall-carousel" data-pc-carousel data-interval="5500">
-        <div class="pc-detail-wall-card">
-            <div class="pc-detail-wall-media">
-                @for (var i = 0; i < slides.Count; i++)
-                {
-                    var slide = slides[i];
-                    var zoom = slide.Zoom.ToString(inv);
-                    var fx = slide.FocusX.ToString(inv);
-                    var fy = slide.FocusY.ToString(inv);
-                    <div class="pc-detail-wall-slide-media@(i == 0 ? " is-active" : "")"
+    <div class="pc-detail-wall-carousel" data-pc-carousel data-interval="8500">
+        <div class="pc-detail-wall-slides">
+            @for (var i = 0; i < slides.Count; i++)
+            {
+                var slide = slides[i];
+                var displayPath = !string.IsNullOrWhiteSpace(slide.LeftImagePath)
+                    ? slide.LeftImagePath
+                    : slide.CoverImagePath;
+                var isEffect = !string.IsNullOrWhiteSpace(slide.LatestEffectImageUrl)
+                    || displayPath?.Contains("/effects/", StringComparison.OrdinalIgnoreCase) == true;
+                <article class="pc-detail-wall-slide@(i == 0 ? " is-active" : "")"
                          data-slide-index="@i"
-                         style="--zoom: @zoom; --focus-x: @(fx)%; --focus-y: @(fy)%;">
-                        @if (!string.IsNullOrWhiteSpace(slide.CoverImagePath))
-                        {
-                            <img src="@slide.CoverImagePath" alt="@slide.DisplayName" loading="@(i == 0 ? "eager" : "lazy")" />
-                        }
-                        else
-                        {
-                            <div class="pc-placeholder-visual pc-detail-wall-ph" role="img" aria-label="@slide.DisplayName"></div>
-                        }
-                    </div>
-                }
-                @if (slides.Count > 1)
-                {
-                    <div class="pc-detail-wall-dots" role="tablist" aria-label="輪播指示">
-                        @for (var i = 0; i < slides.Count; i++)
-                        {
-                            <button type="button"
-                                    class="pc-detail-wall-dot@(i == 0 ? " is-active" : "")"
-                                    data-slide-to="@i"
-                                    aria-label="第 @(i + 1) 盆"
-                                    aria-selected="@(i == 0 ? "true" : "false")"></button>
-                        }
-                    </div>
-                }
-            </div>
-
-            <div class="pc-detail-wall-copy">
-                @for (var i = 0; i < slides.Count; i++)
-                {
-                    var slide = slides[i];
-                    <div class="pc-detail-wall-slide-copy@(i == 0 ? " is-active" : "")" data-slide-index="@i">
-                        <h3 class="pc-detail-wall-name">
-                            @if (slide.PlantId != Guid.Empty)
-                            {
-                                <a class="pc-detail-wall-name-link"
-                                   asp-controller="Plant"
-                                   asp-action="Details"
-                                   asp-route-id="@slide.PlantId">@slide.DisplayName</a>
-                            }
-                            else
-                            {
-                                @slide.DisplayName
-                            }
-                        </h3>
-                        @if (!string.IsNullOrWhiteSpace(slide.ScientificName))
-                        {
-                            <p class="pc-detail-wall-sci">@slide.ScientificName</p>
-                        }
-                        <p class="pc-detail-wall-intro">@slide.Intro</p>
-                        @if (slide.CareFacts.Count > 0)
-                        {
-                            <div class="pc-detail-wall-facts care-facts" aria-label="物種照護知識">
-                                @foreach (var fact in slide.CareFacts)
+                         data-plant-id="@slide.PlantId">
+                    <div class="pc-detail-wall-media@(isEffect ? " is-effect" : "")">
+                        <div class="pc-detail-wall-slide-media is-active@(isEffect ? " is-effect" : "")">
+                            <div class="pc-detail-wall-view">
+                                @if (!string.IsNullOrWhiteSpace(displayPath))
                                 {
-                                    <div>
-                                        <span>@fact.Label</span>
-                                        @fact.Value
-                                    </div>
+                                    <img src="@displayPath" alt="@slide.DisplayName" loading="@(i == 0 ? "eager" : "lazy")" />
+                                }
+                                else
+                                {
+                                    <div class="pc-placeholder-visual pc-detail-wall-ph" role="img" aria-label="@slide.DisplayName"></div>
+                                }
+                            </div>
+                        </div>
+                        @if (slides.Count > 1)
+                        {
+                            <div class="pc-detail-wall-dots" role="tablist" aria-label="投影片">
+                                @for (var d = 0; d < slides.Count; d++)
+                                {
+                                    <button type="button"
+                                            class="pc-detail-wall-dot@(d == 0 ? " is-active" : "")"
+                                            data-slide-to="@d"
+                                            role="tab"
+                                            aria-selected="@(d == 0 ? "true" : "false")"
+                                            aria-label="第 @(d + 1) 張"></button>
                                 }
                             </div>
                         }
                     </div>
-                }
-            </div>
+                    <div class="pc-detail-wall-copy">
+                        <div class="pc-detail-wall-slide-copy is-active">
+                            <h3 class="pc-detail-wall-name">
+                                @if (slide.PlantId != Guid.Empty)
+                                {
+                                    <a class="pc-detail-wall-name-link"
+                                       asp-controller="Plant"
+                                       asp-action="Details"
+                                       asp-route-id="@slide.PlantId">@slide.DisplayName</a>
+                                }
+                                else
+                                {
+                                    @slide.DisplayName
+                                }
+                            </h3>
+                            @if (!string.IsNullOrWhiteSpace(slide.ScientificName))
+                            {
+                                <p class="pc-detail-wall-sci">@slide.ScientificName</p>
+                            }
+                            <p class="pc-detail-wall-intro">@slide.Intro</p>
+                            @if (slide.CareFacts.Count > 0)
+                            {
+                                <div class="pc-detail-wall-facts care-facts" aria-label="物種照護知識">
+                                    @foreach (var fact in slide.CareFacts)
+                                    {
+                                        <div>
+                                            <span>@fact.Label</span>
+                                            @fact.Value
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </article>
+            }
         </div>
     </div>
 </section>

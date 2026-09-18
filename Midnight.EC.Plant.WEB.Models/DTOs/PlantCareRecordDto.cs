@@ -8,6 +8,7 @@ public class PlantCareRecordDto
     public Guid PlantId { get; set; }
     public DateTime RecordDate { get; set; }
     public CareRecordType CareType { get; set; }
+    public Guid? FertilizerProductId { get; set; }
     public decimal? NumericValue { get; set; }
     public string? Unit { get; set; }
     public string? Note { get; set; }

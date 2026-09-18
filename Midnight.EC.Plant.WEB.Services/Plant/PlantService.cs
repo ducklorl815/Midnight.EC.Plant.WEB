@@ -20,7 +20,7 @@ public class PlantService
 
     private readonly PlantRespo _plantRepository;
     private readonly PlantSpeciesRespo _speciesRepository;
-    private readonly IOpenAISpeciesFinderService _speciesFinder;
+    private readonly OpenAISpeciesFinderService _speciesFinder;
     private readonly PlantKnowledgeService _plantKnowledgeService;
     private readonly PlantProfileService _plantProfileService;
     private readonly PlantCareService _plantCareService;
@@ -29,7 +29,7 @@ public class PlantService
     public PlantService(
         PlantRespo plantRepository,
         PlantSpeciesRespo speciesRepository,
-        IOpenAISpeciesFinderService speciesFinder,
+        OpenAISpeciesFinderService speciesFinder,
         PlantKnowledgeService plantKnowledgeService,
         PlantProfileService plantProfileService,
         PlantCareService plantCareService,
@@ -116,6 +116,7 @@ public class PlantService
     public async Task<Guid> EnsureSpeciesKnowledgeAsync(
         ExternalSpeciesResult confirmedSpecies,
         string chineseName,
+        string? environmentSubstrateType = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(confirmedSpecies.ScientificName))
@@ -124,7 +125,7 @@ public class PlantService
         }
 
         var species = await ResolveOrCreateSpeciesAsync(confirmedSpecies, chineseName.Trim(), cancellationToken);
-        var refresh = await _plantKnowledgeService.RefreshFromExternalAsync(species.ID, chineseName.Trim(), cancellationToken);
+        var refresh = await _plantKnowledgeService.RefreshAsync(species.ID, chineseName.Trim(), cancellationToken);
         if (refresh.AiSupplement == AiSupplementOutcome.ServiceFailed)
         {
             throw new InvalidOperationException(
@@ -133,9 +134,9 @@ public class PlantService
                     : refresh.AiFailureReason);
         }
 
-        if (CareKnowledgeCompleteness.HasGaps(refresh.Knowledge))
+        if (CareKnowledgeCompleteness.HasGaps(refresh.Knowledge, environmentSubstrateType))
         {
-            var gaps = string.Join("、", CareKnowledgeCompleteness.ListMissingFields(refresh.Knowledge));
+            var gaps = string.Join("、", CareKnowledgeCompleteness.ListMissingFields(refresh.Knowledge, environmentSubstrateType));
             throw new InvalidOperationException($"照護知識仍不完整（{gaps}），請重試。");
         }
 
@@ -168,15 +169,6 @@ public class PlantService
         if (confirmedSpecies != null && !string.IsNullOrWhiteSpace(confirmedSpecies.ScientificName))
         {
             species = await ResolveOrCreateSpeciesAsync(confirmedSpecies, chineseName, cancellationToken);
-            try
-            {
-                // 若上層已 Ensure／Refresh 過則跳過；否則首次寫入知識
-                await _plantKnowledgeService.SyncFromExternalAsync(species.ID, chineseName, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Knowledge sync failed for species {SpeciesId}; plant will still be created", species.ID);
-            }
         }
         else
         {
@@ -249,15 +241,8 @@ public class PlantService
             : (plant.Name ?? string.Empty);
 
         var species = await ResolveOrCreateSpeciesAsync(confirmedSpecies, chineseName, cancellationToken);
-        try
-        {
-            // 上層 ConfirmReselect 已 Ensure／強制同步；此處僅補首次寫入
-            await _plantKnowledgeService.SyncFromExternalAsync(species.ID, chineseName, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Knowledge sync failed for species {SpeciesId} during rebind", species.ID);
-        }
+
+        plant.SpeciesID = species.ID;
 
         plant.SpeciesID = species.ID;
         if (!string.IsNullOrWhiteSpace(chineseName))

@@ -43,7 +43,7 @@ body > .home-fluid {
 
 body.home-chrome,
 body.wall-editor-chrome {
-    background: #eef2ef;
+    background: #fff;
 }
 
 body.home-chrome > .home-fluid,
@@ -247,7 +247,7 @@ footer.footer {
 }
 
 .status-pill-muted {
-    background: #eef2ef;
+    background: #fff;
     color: var(--plant-muted);
 }
 
@@ -283,7 +283,7 @@ footer.footer {
     gap: 0.4rem;
     padding: 0.35rem 0.75rem;
     border-radius: 999px;
-    background: #eef2ef;
+    background: #fff;
     color: var(--plant-muted);
     font-size: 0.85rem;
     font-weight: 600;
@@ -416,7 +416,7 @@ footer.footer {
     align-items: center;
     gap: 0.75rem;
     padding: 0.85rem 0;
-    border-bottom: 1px solid #eef2ef;
+    border-bottom: 1px solid #fff;
 }
 
 .todo-fill-item:last-child {

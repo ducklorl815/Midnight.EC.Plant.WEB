@@ -1,0 +1,151 @@
+@model Midnight.EC.Plant.WEB.ViewModels.PlantListPageViewModel
+@{
+    ViewData["Title"] = "植栽清單";
+    string FormatDays(int? days)
+    {
+        if (!days.HasValue) return "—";
+        if (days.Value > 0) return $"還需 {days.Value} 天";
+        if (days.Value == 0) return "今天";
+        return $"已過 {Math.Abs(days.Value)} 天";
+    }
+    string DaysCss(int? days)
+    {
+        if (!days.HasValue) return "text-muted";
+        if (days.Value < 0) return "text-danger fw-semibold";
+        if (days.Value == 0) return "text-warning fw-semibold";
+        return "text-muted";
+    }
+}
+
+@if (TempData["Error"] is string err)
+{
+    <div class="alert alert-warning">@err</div>
+}
+@if (TempData["Success"] is string ok)
+{
+    <div class="alert alert-success">@ok</div>
+}
+
+<div class="d-flex flex-wrap align-items-end justify-content-between gap-2 mb-3">
+    <div>
+        <h1 class="h3 mb-1">植栽清單</h1>
+        <p class="text-muted small mb-0">全盆健康度、澆水與盆用肥料倒數；可一鍵寫入今日紀錄。</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        @if (Model.Items.Count > 0)
+        {
+            <form asp-action="BatchWaterAll" method="post" class="d-inline"
+                  onsubmit="return confirm('確定為清單上全部植栽標記今日澆水？');">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-emphasis">一鍵全澆水</button>
+            </form>
+            <form asp-action="BatchFertilizeAll" method="post" class="d-inline"
+                  onsubmit="return confirm('確定為清單上全部植栽寫入今日施肥（各肥種都會記一筆）？');">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-sm btn-outline-emphasis">一鍵全施肥</button>
+            </form>
+        }
+        <a class="btn btn-sm btn-outline-secondary" asp-action="Create">新增植栽</a>
+    </div>
+</div>
+
+@if (Model.Items.Count == 0)
+{
+    <div class="alert alert-light border">尚無植栽。<a asp-action="Create">立刻新增一盆</a></div>
+}
+else
+{
+    <div class="table-responsive plant-list-table">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th scope="col">植栽</th>
+                    <th scope="col">健康度</th>
+                    <th scope="col">澆水</th>
+                    <th scope="col">施肥</th>
+                    <th scope="col" class="text-end">快速動作</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            @if (!string.IsNullOrWhiteSpace(item.CoverImagePath))
+                            {
+                                <img src="@item.CoverImagePath" alt="" class="plant-list-thumb rounded" width="48" height="48" />
+                            }
+                            else
+                            {
+                                <div class="plant-list-thumb plant-list-thumb-empty rounded" aria-hidden="true"></div>
+                            }
+                            <a asp-action="Details" asp-route-id="@item.PlantId" class="fw-semibold text-decoration-none">@item.DisplayName</a>
+                        </div>
+                    </td>
+                    <td>
+                        @if (item.LatestHealthScore.HasValue)
+                        {
+                            var score = item.LatestHealthScore.Value;
+                            var badge = score >= 70 ? "good" : score >= 50 ? "warn" : "bad";
+                            <span class="health-badge health-badge-@badge">@score</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td class="@DaysCss(item.WaterDaysRemaining)">@FormatDays(item.WaterDaysRemaining)</td>
+                    <td>
+                        <ul class="list-unstyled mb-0 small">
+                            @foreach (var fert in item.Fertilizers)
+                            {
+                                <li class="@DaysCss(fert.DaysRemaining)">
+                                    <span class="fw-semibold">@fert.Name</span>
+                                    · @FormatDays(fert.DaysRemaining)
+                                </li>
+                            }
+                        </ul>
+                    </td>
+                    <td class="text-end">
+                        <div class="d-inline-flex flex-wrap justify-content-end gap-1">
+                            <form asp-action="QuickWater" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="plantId" value="@item.PlantId" />
+                                <button type="submit" class="btn btn-sm btn-emphasis">澆水</button>
+                            </form>
+                            @foreach (var fert in item.Fertilizers)
+                            {
+                                <form asp-action="QuickFertilize" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="plantId" value="@item.PlantId" />
+                                    @if (fert.FertilizerProductId.HasValue)
+                                    {
+                                        <input type="hidden" name="fertilizerProductId" value="@fert.FertilizerProductId" />
+                                    }
+                                    <button type="submit" class="btn btn-sm btn-outline-emphasis">@fert.Name</button>
+                                </form>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+<style>
+.plant-list-thumb {
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #e8ece9;
+}
+.plant-list-thumb-empty {
+  width: 48px;
+  height: 48px;
+}
+.plant-list-table td {
+  vertical-align: middle;
+}
+</style>

@@ -109,6 +109,24 @@ public static class EntityMappingExtensions
         CreateDate = entity.CreateDate
     };
 
+    public static PlantEffectImageDto ToDto(this PlantEffectImageModel entity) => new()
+    {
+        Id = entity.ID,
+        PlantId = entity.PlantID,
+        OriginalPhotoId = entity.OriginalPhotoID,
+        GeneratedImagePath = entity.GeneratedImagePath,
+        Style = entity.Style,
+        Layout = entity.Layout,
+        ColorPalette = entity.ColorPalette,
+        DecorationJson = entity.DecorationJson,
+        PromptVersion = entity.PromptVersion,
+        Status = entity.Status,
+        GenerationRequestId = entity.GenerationRequestId,
+        ErrorMessage = entity.ErrorMessage,
+        IsLatest = entity.IsLatest,
+        CreateDate = entity.CreateDate
+    };
+
     public static PlantAnalysisJobDto ToDto(this PlantAnalysisJobModel entity) => new()
     {
         Id = entity.ID,
@@ -141,10 +159,20 @@ public static class EntityMappingExtensions
         PlantId = entity.PlantID,
         RecordDate = entity.RecordDate,
         CareType = entity.CareType,
+        FertilizerProductId = entity.FertilizerProductID,
         NumericValue = entity.NumericValue,
         Unit = entity.Unit,
         Note = entity.Note,
         CreateDate = entity.CreateDate
+    };
+
+    public static PlantFertilizerProductDto ToDto(this PlantFertilizerProductModel entity) => new()
+    {
+        Id = entity.ID,
+        PlantId = entity.PlantID,
+        Name = entity.Name,
+        IntervalDays = entity.IntervalDays,
+        SortOrder = entity.SortOrder
     };
 
     public static PlantProfileDto ToDto(this PlantProfileModel entity) => new()

@@ -1,0 +1,231 @@
+/* Plant effect image modal + DB Traditional Chinese overlay */
+
+.plant-effect-btn-wrap {
+  position: absolute;
+  z-index: 3;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: calc(100% - 1.5rem);
+}
+
+.pc-detail-wall-media .plant-effect-btn-wrap {
+  pointer-events: auto;
+}
+
+.plant-effect-status {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  background: rgba(20, 40, 30, 0.45);
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.35rem;
+}
+
+body.plant-effect-modal-open {
+  overflow: hidden;
+}
+
+.plant-effect-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.plant-effect-modal.d-none {
+  display: none !important;
+}
+
+.plant-effect-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(18, 28, 22, 0.55);
+}
+
+.plant-effect-modal-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(920px, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  background: #fff;
+  border-radius: 1rem;
+  padding: 1rem 1rem 1.1rem;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+}
+
+.plant-effect-modal-close {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.55rem;
+  border: 0;
+  background: transparent;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: #445;
+  cursor: pointer;
+}
+
+.plant-effect-stage {
+  position: relative;
+  border-radius: clamp(20px, 4vw, 32px);
+  overflow: hidden;
+  background: #fff;
+  aspect-ratio: 16 / 9;
+}
+
+.plant-effect-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: clamp(20px, 4vw, 32px);
+  background: #fff;
+  object-fit: contain;
+}
+
+/* Single specimen card — DB Traditional Chinese (not AI-drawn) */
+.plant-effect-overlay.pe-specimen-card {
+  position: absolute;
+  left: var(--pe-card-x, 6%);
+  top: var(--pe-card-y, 22%);
+  right: auto;
+  bottom: auto;
+  max-width: min(38%, 270px);
+  padding: 0.85rem 0.9rem 0.75rem;
+  background:
+    linear-gradient(160deg, rgba(255, 250, 240, 0.96), rgba(245, 236, 220, 0.94));
+  border: 1px solid rgba(70, 60, 40, 0.18);
+  box-shadow: 0 10px 24px rgba(20, 16, 10, 0.28);
+  border-radius: 2px 14px 3px 12px;
+  transform: rotate(-1.4deg);
+  color: #243028;
+  z-index: 2;
+  clip-path: polygon(0 0, 100% 0, 100% 96%, 97% 100%, 0 100%);
+}
+
+.pe-specimen-kicker {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  color: #5a6658;
+  margin-bottom: 0.35rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid rgba(60, 70, 55, 0.25);
+}
+
+.plant-effect-overlay-title {
+  font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+  font-weight: 800;
+  font-size: clamp(1rem, 2.4vw, 1.25rem);
+  margin-bottom: 0.12rem;
+  line-height: 1.25;
+}
+
+.plant-effect-overlay-sci {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: 0.78rem;
+  color: #4d6356;
+  margin-bottom: 0.4rem;
+}
+
+.plant-effect-overlay-intro {
+  font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  margin-bottom: 0.5rem;
+  color: #334038;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.plant-effect-overlay-facts {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.pe-fact {
+  font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  display: grid;
+  gap: 0.05rem;
+}
+
+.pe-fact-label {
+  font-weight: 700;
+  color: #5a6f60;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+}
+
+.pe-fact-value {
+  color: #1f2a22;
+  word-break: break-word;
+}
+
+.pe-specimen-note {
+  margin-top: 0.55rem;
+  font-size: 0.58rem;
+  color: #7a8678;
+}
+
+.plant-effect-modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.85rem;
+}
+
+.plant-effect-meta {
+  margin-top: 0.45rem;
+}
+
+/* Home / editor wall: effect slides use same framing as covers (see page-composer.css) */
+.pc-detail-wall-slide-media.is-effect {
+  background: #fff;
+}
+
+.plant-effect-stage {
+  position: relative;
+  border-radius: clamp(20px, 4vw, 32px);
+  overflow: hidden;
+  background: #fff;
+}
+
+.plant-effect-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: clamp(20px, 4vw, 32px);
+  background: #fff;
+  object-fit: contain;
+}
+
+/* Wall / editor: overlay sits on the media frame, not inside zoomed source view */
+.pc-detail-wall-slide-media > .plant-effect-overlay.pe-specimen-card {
+  z-index: 4;
+  pointer-events: none;
+}
+
+@media (max-width: 720px) {
+  .plant-effect-overlay.pe-specimen-card {
+    max-width: min(72%, 250px);
+    left: var(--pe-card-x, 6%);
+    top: var(--pe-card-y, 22%);
+    bottom: auto;
+    transform: rotate(-0.5deg);
+  }
+
+  .plant-effect-overlay-intro {
+    -webkit-line-clamp: 2;
+  }
+}

@@ -59,8 +59,23 @@
     return "m" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
 
+  function moduleType(m) {
+    if (!m) return "";
+    var t = m.type != null ? m.type : m.Type;
+    return t == null ? "" : String(t);
+  }
+
+  function isPlantDetailWall(m) {
+    var t = moduleType(m);
+    return (
+      t === "PlantDetailWallCarousel" ||
+      t === "5" ||
+      t === "左圖右文·植栽細節牆·輪播"
+    );
+  }
+
   function typeLabel(t) {
-    return TYPE_LABELS[t] || t;
+    return TYPE_LABELS[t] || TYPE_LABELS[String(t)] || t;
   }
 
   function syncOrders() {
@@ -98,35 +113,97 @@
     return [];
   }
 
+  function samePlantId(a, b) {
+    return String(a || "").toLowerCase() === String(b || "").toLowerCase();
+  }
+
   function ensureFrames(module) {
     if (!module.slideFrames) module.slideFrames = [];
     var catalog = catalogFor(module.id);
     catalog.forEach(function (s) {
       if (!s.plantId || s.plantId === "00000000-0000-0000-0000-000000000000") return;
       var exists = module.slideFrames.some(function (f) {
-        return f.plantId === s.plantId;
+        return samePlantId(f.plantId, s.plantId);
       });
       if (!exists) {
-        module.slideFrames.push({
-          plantId: s.plantId,
-          zoom: 1,
-          focusX: 50,
-          focusY: 50
-        });
+        module.slideFrames.push(createDefaultFrame(s.plantId));
       }
     });
+    module.slideFrames.forEach(normalizeFrame);
+  }
+
+  function createDefaultFrame(plantId) {
+    return {
+      plantId: plantId,
+      zoom: 1,
+      focusX: 50,
+      focusY: 50,
+      sourceZoom: 1,
+      sourceFocusX: 50,
+      sourceFocusY: 50,
+      cardX: 6,
+      cardY: 22,
+      effectImageId: null,
+      effectImageIsComposedFinal: false,
+      effectImageUrl: null,
+      pendingEffectId: null,
+      pendingEffectIsComposedFinal: false,
+      pendingEffectUrl: null,
+      pendingBaseId: null,
+      pendingBaseUrl: null
+    };
+  }
+
+  function normalizeFrame(frame) {
+    if (!frame) return frame;
+    if (frame.zoom == null || frame.zoom <= 0) frame.zoom = 1;
+    if (frame.focusX == null) frame.focusX = 50;
+    if (frame.focusY == null) frame.focusY = 50;
+    if (frame.sourceZoom == null || frame.sourceZoom <= 0) frame.sourceZoom = 1;
+    if (frame.sourceFocusX == null) frame.sourceFocusX = 50;
+    if (frame.sourceFocusY == null) frame.sourceFocusY = 50;
+    if (frame.cardX == null) frame.cardX = 6;
+    if (frame.cardY == null) frame.cardY = 22;
+    if (frame.effectImageIsComposedFinal == null) frame.effectImageIsComposedFinal = false;
+    if (frame.pendingEffectId === undefined) frame.pendingEffectId = null;
+    if (frame.pendingEffectIsComposedFinal === undefined) frame.pendingEffectIsComposedFinal = false;
+    if (frame.pendingEffectUrl === undefined) frame.pendingEffectUrl = null;
+    if (frame.pendingBaseId === undefined) frame.pendingBaseId = null;
+    if (frame.pendingBaseUrl === undefined) frame.pendingBaseUrl = null;
+    return frame;
   }
 
   function getFrame(module, plantId) {
     ensureFrames(module);
     var frame = module.slideFrames.find(function (f) {
-      return f.plantId === plantId;
+      return samePlantId(f.plantId, plantId);
     });
     if (!frame) {
-      frame = { plantId: plantId, zoom: 1, focusX: 50, focusY: 50 };
+      frame = createDefaultFrame(plantId);
       module.slideFrames.push(frame);
     }
-    return frame;
+    return normalizeFrame(frame);
+  }
+
+  function resetFrameView(frame) {
+    frame.zoom = 1;
+    frame.focusX = 50;
+    frame.focusY = 50;
+  }
+
+  function resetFrameSource(frame) {
+    frame.sourceZoom = 1;
+    frame.sourceFocusX = 50;
+    frame.sourceFocusY = 50;
+  }
+
+  function hydrateLatestEffect(frame, slide) {
+    if (!frame || !slide) return;
+    if (frame.effectImageId || frame.effectImageUrl || frame.pendingEffectId || frame.pendingEffectUrl) return;
+    if (!slide.latestEffectImageId || !slide.latestEffectImageUrl) return;
+    frame.pendingEffectId = slide.latestEffectImageId;
+    frame.pendingEffectUrl = slide.latestEffectImageUrl;
+    frame.pendingEffectIsComposedFinal = !!slide.latestEffectIsComposedFinal;
   }
 
   function createModule(type) {
@@ -558,7 +635,7 @@
       return;
     }
 
-    if (module.type !== "PlantDetailWallCarousel") {
+    if (!isPlantDetailWall(module)) {
       detailEmpty.classList.remove("d-none");
       detailEmpty.textContent = "此模組類型尚無細項編輯（目前僅 Banner 與植栽細節牆·輪播）。";
       detailCarousel.classList.add("d-none");
@@ -585,34 +662,66 @@
     catalog.forEach(function (slide, idx) {
       if (!slide.plantId || slide.plantId.indexOf("00000000") === 0) return;
       var frame = getFrame(module, slide.plantId);
+      hydrateLatestEffect(frame, slide);
       var row = document.createElement("div");
-      row.className = "pc-frame-row" + (selectedPlantId === slide.plantId ? " is-active" : "");
+      row.className = "pc-frame-row" + (samePlantId(selectedPlantId, slide.plantId) ? " is-active" : "");
       row.dataset.plantId = slide.plantId;
 
-      var thumb = slide.coverImagePath
-        ? '<img class="pc-frame-thumb" src="' + esc(slide.coverImagePath) + '" alt="" />'
+      var thumbSrc = frame.effectImageUrl || frame.pendingEffectUrl || resolveOriginalCoverPath(slide) || slide.coverImagePath;
+      var thumb = thumbSrc
+        ? '<img class="pc-frame-thumb" src="' + esc(thumbSrc) + '" alt="" />'
         : '<div class="pc-frame-thumb pc-frame-thumb-empty"></div>';
+
+      var hasApplied = !!(frame.effectImageUrl && frame.effectImageId);
+      var hasPending = !!(frame.pendingEffectUrl && frame.pendingEffectId);
+      var photoId = slide.coverImageId || "";
+      var pendingLabel = hasApplied ? "重新置換" : "置換";
+      var previewLabel = hasPending
+        ? "已找到已生成效果圖，可直接置換。"
+        : "";
 
       row.innerHTML =
         '<button type="button" class="pc-frame-pick">' +
         thumb +
         '<span class="pc-frame-name"></span></button>' +
         '<div class="pc-frame-fields">' +
-        '<label class="pc-frame-scale">縮放 <input type="range" class="form-range pc-f-zoom-range" min="0.5" max="3" step="0.01" />' +
-        '<input type="number" class="form-control form-control-sm pc-f-zoom" min="0.05" max="8" step="0.01" /></label>' +
-        '<label>左右 <input type="range" class="form-range pc-f-x" min="0" max="100" step="1" /></label>' +
-        '<label>上下 <input type="range" class="form-range pc-f-y" min="0" max="100" step="1" /></label>' +
+        '<div class="pc-frame-effect-actions">' +
+        '<button type="button" class="btn btn-sm btn-plant-primary pc-f-effect-gen"' +
+        (photoId ? "" : " disabled") +
+        ">生成效果圖</button>" +
+        '<button type="button" class="btn btn-sm btn-emphasis pc-f-effect-apply"' +
+        (hasPending || hasApplied ? "" : " disabled") +
+        ">" +
+        (hasApplied && !hasPending ? "已置換" : pendingLabel) +
+        "</button>" +
+        '<button type="button" class="btn btn-sm btn-outline-secondary pc-f-effect-reset"' +
+        (hasApplied || hasPending ? "" : " disabled") +
+        ">還原原圖</button>" +
+        "</div>" +
+        '<div class="pc-frame-effect-status small text-muted">' +
+        esc(previewLabel) +
+        "</div>" +
+        (hasPending
+          ? '<div class="pc-frame-effect-preview"><img src="' +
+            esc(frame.pendingEffectUrl) +
+            '" alt="待置換效果圖" /></div>'
+          : hasApplied
+            ? '<div class="pc-frame-effect-preview is-applied"><img src="' +
+              esc(frame.effectImageUrl) +
+              '" alt="已置換效果圖" /></div>'
+            : "") +
         "</div>";
 
-      row.querySelector(".pc-frame-name").textContent = (idx + 1) + ". " + (slide.displayName || "植栽");
-      var zoomInput = row.querySelector(".pc-f-zoom");
-      var zoomRange = row.querySelector(".pc-f-zoom-range");
-      var xInput = row.querySelector(".pc-f-x");
-      var yInput = row.querySelector(".pc-f-y");
-      zoomInput.value = frame.zoom;
-      zoomRange.value = clamp(frame.zoom, 0.5, 3);
-      xInput.value = frame.focusX;
-      yInput.value = frame.focusY;
+      row.querySelector(".pc-frame-name").textContent =
+        idx +
+        1 +
+        ". " +
+        (slide.displayName || "植栽") +
+        (hasApplied ? " · 效果圖" : "");
+      var statusEl = row.querySelector(".pc-frame-effect-status");
+      var genBtn = row.querySelector(".pc-f-effect-gen");
+      var applyBtn = row.querySelector(".pc-f-effect-apply");
+      var resetBtn = row.querySelector(".pc-f-effect-reset");
 
       row.querySelector(".pc-frame-pick").addEventListener("click", function () {
         selectedPlantId = slide.plantId;
@@ -620,24 +729,88 @@
         refreshPreview();
       });
 
-      function commitFromInputs() {
-        frame.zoom = clamp(parseFloat(zoomInput.value) || 1, 0.05, 8);
-        frame.focusX = clamp(parseFloat(xInput.value) || 50, 0, 100);
-        frame.focusY = clamp(parseFloat(yInput.value) || 50, 0, 100);
-        zoomInput.value = frame.zoom;
-        zoomRange.value = clamp(frame.zoom, 0.5, 3);
-        xInput.value = frame.focusX;
-        yInput.value = frame.focusY;
-        refreshPreview();
-      }
-
-      zoomInput.addEventListener("change", commitFromInputs);
-      zoomRange.addEventListener("input", function () {
-        zoomInput.value = zoomRange.value;
-        commitFromInputs();
+      genBtn.addEventListener("click", async function () {
+        if (!photoId) {
+          statusEl.textContent = "此盆尚無封面照片，無法生成。";
+          return;
+        }
+        var force = !!(frame.effectImageUrl || frame.pendingEffectUrl || frame.pendingBaseUrl);
+        var confirmText = force
+          ? "確定要重新生成效果圖嗎？這會再次消耗圖片 token。"
+          : "確定要生成效果圖嗎？這會消耗圖片 token。";
+        if (!window.confirm(confirmText)) return;
+        selectedPlantId = slide.plantId;
+        genBtn.disabled = true;
+        applyBtn.disabled = true;
+        statusEl.textContent = "正在製作效果圖，請稍候…";
+        try {
+          var endpoint = force
+            ? "/PlantEffectImage/Regenerate?photoId=" +
+              encodeURIComponent(photoId)
+            : "/PlantEffectImage/Generate?photoId=" +
+              encodeURIComponent(photoId);
+          var response = await fetch(endpoint, { method: "POST" });
+          var data = await response.json().catch(function () {
+            return {};
+          });
+          if (!response.ok) throw new Error(data.error || "效果圖生成失敗。");
+          frame.pendingBaseId = null;
+          frame.pendingBaseUrl = null;
+          frame.pendingEffectId = data.id;
+          frame.pendingEffectUrl = data.generatedImageUrl;
+          frame.pendingEffectIsComposedFinal = !!data.isComposedFinal;
+          statusEl.textContent = "效果圖已生成，可直接查看或置換。";
+          if (window.PlantEffectImageUI && data.generatedImageUrl) {
+            window.PlantEffectImageUI.showResult(data, genBtn, {
+              confirm: false
+            });
+          }
+          genBtn.disabled = false;
+          applyBtn.disabled = false;
+          renderDetail();
+          refreshPreview();
+        } catch (err) {
+          statusEl.textContent = err.message || "效果圖生成失敗。";
+          genBtn.disabled = false;
+          applyBtn.disabled = !(frame.pendingEffectUrl || frame.effectImageUrl);
+        }
       });
-      xInput.addEventListener("input", commitFromInputs);
-      yInput.addEventListener("input", commitFromInputs);
+
+      applyBtn.addEventListener("click", function () {
+        if (!frame.pendingEffectUrl && !frame.effectImageUrl) {
+          statusEl.textContent = "請先生成效果圖。";
+          return;
+        }
+        if (frame.pendingEffectUrl) {
+          frame.effectImageId = frame.pendingEffectId;
+          frame.effectImageIsComposedFinal = !!frame.pendingEffectIsComposedFinal;
+          frame.effectImageUrl = frame.pendingEffectUrl;
+          frame.pendingEffectId = null;
+          frame.pendingEffectIsComposedFinal = false;
+          frame.pendingEffectUrl = null;
+          frame.pendingBaseId = null;
+          frame.pendingBaseUrl = null;
+        }
+        selectedPlantId = slide.plantId;
+        statusEl.textContent = "已置換到編輯預覽。記得按左側「儲存」寫入首頁。";
+        renderDetail();
+        refreshPreview();
+      });
+
+      resetBtn.addEventListener("click", function () {
+        frame.effectImageId = null;
+        frame.effectImageIsComposedFinal = false;
+        frame.effectImageUrl = null;
+        frame.pendingEffectId = null;
+        frame.pendingEffectIsComposedFinal = false;
+        frame.pendingEffectUrl = null;
+        frame.pendingBaseId = null;
+        frame.pendingBaseUrl = null;
+        selectedPlantId = slide.plantId;
+        statusEl.textContent = "已還原原圖。記得按「儲存」。";
+        renderDetail();
+        refreshPreview();
+      });
 
       frameListEl.appendChild(row);
     });
@@ -664,56 +837,124 @@
     ensureFrames(module);
     return catalog.map(function (s) {
       var frame = getFrame(module, s.plantId);
+      hydrateLatestEffect(frame, s);
+      var originalCover = resolveOriginalCoverPath(s);
+      var displayPath = frame.effectImageUrl || frame.pendingEffectUrl || originalCover;
       return Object.assign({}, s, {
-        zoom: frame.zoom,
-        focusX: frame.focusX,
-        focusY: frame.focusY
+        zoom: 1,
+        focusX: 50,
+        focusY: 50,
+        sourceZoom: 1,
+        sourceFocusX: 50,
+        sourceFocusY: 50,
+        cardX: frame.cardX,
+        cardY: frame.cardY,
+        coverImagePath: displayPath,
+        originalCoverImagePath: originalCover,
+        effectImageUrl: frame.effectImageUrl || frame.pendingEffectUrl || null,
+        effectImageIsComposedFinal:
+          frame.effectImageUrl
+            ? !!frame.effectImageIsComposedFinal
+            : frame.pendingEffectUrl
+              ? !!frame.pendingEffectIsComposedFinal
+              : !!s.latestEffectIsComposedFinal,
+        coverImageId: s.coverImageId || null
       });
     });
   }
 
+  /** Catalog must keep real cover; never treat /effects/ path as 原圖. */
+  function resolveOriginalCoverPath(s) {
+    if (!s) return null;
+    var plantId = s.plantId;
+    var fromCatalog = coverUrlFromPhotoCatalog(plantId);
+    if (fromCatalog) return fromCatalog;
+
+    var cover = s.coverImagePath;
+    if (!cover) return null;
+    var coverStr = String(cover);
+    if (coverStr.indexOf("/effects/") >= 0) return null;
+    return cover;
+  }
+
+  function coverUrlFromPhotoCatalog(plantId) {
+    if (!plantId || !photoCatalog.length) return null;
+    var want = String(plantId).toLowerCase();
+    for (var i = 0; i < photoCatalog.length; i++) {
+      var group = photoCatalog[i];
+      if (String(group.plantId || "").toLowerCase() !== want) continue;
+      var photos = group.photos || [];
+      var cover = null;
+      for (var j = 0; j < photos.length; j++) {
+        var ph = photos[j];
+        if (!ph || !ph.url) continue;
+        if (String(ph.url).indexOf("/effects/") >= 0) continue;
+        if (ph.isCover) return ph.url;
+        if (!cover) cover = ph.url;
+      }
+      return cover;
+    }
+    return null;
+  }
+
+  // 修正舊 seed：若 previewSlides 的 cover 已被效果圖覆寫，改回相簿封面
+  Object.keys(plantCatalogByModule).forEach(function (key) {
+    var list = plantCatalogByModule[key];
+    if (!Array.isArray(list)) return;
+    plantCatalogByModule[key] = list.map(function (s) {
+      var fixed = Object.assign({}, s);
+      var realCover = coverUrlFromPhotoCatalog(fixed.plantId);
+      if (realCover) fixed.coverImagePath = realCover;
+      return fixed;
+    });
+  });
+
   function renderDetailWall(m) {
     var slides = slidesFor(m);
-    var mediaHtml = slides
+    var activeIdx = 0;
+    slides.forEach(function (s, i) {
+      if (
+        selectedModuleId === m.id &&
+        selectedPlantId &&
+        samePlantId(s.plantId, selectedPlantId)
+      ) {
+        activeIdx = i;
+      }
+    });
+    var dotsHtml =
+      slides.length > 1
+        ? '<div class="pc-detail-wall-dots" role="tablist" aria-label="投影片">' +
+          slides
+            .map(function (_s, i) {
+              var on = i === activeIdx;
+              return (
+                '<button type="button" class="pc-detail-wall-dot' +
+                (on ? " is-active" : "") +
+                '" data-slide-to="' +
+                i +
+                '" role="tab" aria-selected="' +
+                (on ? "true" : "false") +
+                '" aria-label="第 ' +
+                (i + 1) +
+                ' 張"></button>'
+              );
+            })
+            .join("") +
+          "</div>"
+        : "";
+    var slidesHtml = slides
       .map(function (s, i) {
-        var zoom = s.zoom != null ? s.zoom : 1;
-        var fx = s.focusX != null ? s.focusX : 0;
-        var fy = s.focusY != null ? s.focusY : 100;
-        var style =
-          "--zoom: " + zoom + "; --focus-x: " + fx + "%; --focus-y: " + fy + "%;";
-        var img = s.coverImagePath
-          ? '<img src="' + esc(s.coverImagePath) + '" alt="' + esc(s.displayName) + '" draggable="false" />'
+        var imgPath = s.coverImagePath;
+        var isEffect = !!(s.effectImageUrl || (imgPath && String(imgPath).indexOf("/effects/") >= 0));
+        var facts = Array.isArray(s.careFacts) ? s.careFacts : [];
+        var img = imgPath
+          ? '<img src="' + esc(imgPath) + '" alt="' + esc(s.displayName) + '" draggable="false" />'
           : placeholder("pc-detail-wall-ph");
         var active =
-          (selectedModuleId === m.id && selectedPlantId && s.plantId === selectedPlantId) ||
-          (!selectedPlantId && i === 0);
-        // When editing a plant, force that slide active in preview
-        if (selectedModuleId === m.id && selectedPlantId) {
-          active = s.plantId === selectedPlantId;
-        } else {
-          active = i === 0;
-        }
-        return (
-          '<div class="pc-detail-wall-slide-media' +
-          (active ? " is-active" : "") +
-          '" data-slide-index="' +
-          i +
-          '" data-plant-id="' +
-          esc(s.plantId || "") +
-          '" style="' +
-          style +
-          '">' +
-          img +
-          "</div>"
-        );
-      })
-      .join("");
-    var copyHtml = slides
-      .map(function (s, i) {
-        var active =
           selectedModuleId === m.id && selectedPlantId
-            ? s.plantId === selectedPlantId
+            ? samePlantId(s.plantId, selectedPlantId)
             : i === 0;
+        var mediaClass = isEffect ? " is-effect" : "";
         var hasPlant =
           s.plantId && String(s.plantId).indexOf("00000000") !== 0;
         var nameHtml = hasPlant
@@ -723,7 +964,6 @@
             esc(s.displayName) +
             "</a>"
           : esc(s.displayName);
-        var facts = Array.isArray(s.careFacts) ? s.careFacts : [];
         var factsHtml =
           facts.length > 0
             ? '<div class="pc-detail-wall-facts care-facts">' +
@@ -741,11 +981,29 @@
               "</div>"
             : "";
         return (
-          '<div class="pc-detail-wall-slide-copy' +
+          '<article class="pc-detail-wall-slide' +
           (active ? " is-active" : "") +
           '" data-slide-index="' +
           i +
+          '" data-plant-id="' +
+          esc(s.plantId || "") +
           '">' +
+          '<div class="pc-detail-wall-media pc-frame-stage' +
+          mediaClass +
+          '">' +
+          '<div class="pc-detail-wall-slide-media is-active' +
+          (isEffect ? " is-effect" : "") +
+          '" data-plant-id="' +
+          esc(s.plantId || "") +
+          '">' +
+          '<div class="pc-detail-wall-view">' +
+          img +
+          "</div>" +
+          "</div>" +
+          dotsHtml +
+          "</div>" +
+          '<div class="pc-detail-wall-copy">' +
+          '<div class="pc-detail-wall-slide-copy is-active">' +
           '<h3 class="pc-detail-wall-name">' +
           nameHtml +
           "</h3>" +
@@ -756,48 +1014,22 @@
           esc(s.intro || "尚無介紹") +
           "</p>" +
           factsHtml +
-          "</div>"
+          "</div></div></article>"
         );
       })
       .join("");
-    var dots =
-      slides.length > 1
-        ? '<div class="pc-detail-wall-dots">' +
-          slides
-            .map(function (s, i) {
-              var active =
-                selectedModuleId === m.id && selectedPlantId
-                  ? s.plantId === selectedPlantId
-                  : i === 0;
-              return (
-                '<button type="button" class="pc-detail-wall-dot' +
-                (active ? " is-active" : "") +
-                '" data-slide-to="' +
-                i +
-                '" data-plant-id="' +
-                esc(s.plantId || "") +
-                '"></button>'
-              );
-            })
-            .join("") +
-          "</div>"
-        : "";
 
     return (
       '<section class="pc-module pc-detail-wall" data-module-id="' +
       esc(m.id) +
       '">' +
-      '<div class="pc-detail-wall-carousel" data-pc-carousel data-interval="5500" data-module-id="' +
+      '<div class="pc-detail-wall-carousel" data-pc-carousel data-interval="8500" data-module-id="' +
       esc(m.id) +
       '">' +
-      '<div class="pc-detail-wall-card">' +
-      '<div class="pc-detail-wall-media pc-frame-stage">' +
-      mediaHtml +
-      dots +
+      '<div class="pc-detail-wall-slides">' +
+      slidesHtml +
       "</div>" +
-      '<div class="pc-detail-wall-copy">' +
-      copyHtml +
-      "</div></div></div></section>"
+      "</div></section>"
     );
   }
 
@@ -843,7 +1075,7 @@
 
   function renderModuleHtml(m) {
     var theme = esc(m.theme || "theme-default");
-    if (m.type === "PlantDetailWallCarousel") return renderDetailWall(m);
+    if (isPlantDetailWall(m)) return renderDetailWall(m);
     if (m.type === "NotificationReminders") return renderNotificationReminders(m);
     if (m.type === "Banner") {
       var bImg = m.images && m.images[0];
@@ -942,100 +1174,84 @@
     );
   }
 
-  function bindFramingGestures(root) {
-    root.querySelectorAll(".pc-frame-stage").forEach(function (stage) {
-      var carousel = stage.closest("[data-pc-carousel]");
-      var moduleId = carousel && carousel.getAttribute("data-module-id");
-      if (!moduleId || moduleId !== selectedModuleId) return;
-      var module = findModule(moduleId);
-      if (!module || module.type !== "PlantDetailWallCarousel") return;
-
-      var dragging = false;
-      var lastX = 0;
-      var lastY = 0;
-
-      stage.addEventListener("pointerdown", function (e) {
-        if (!selectedPlantId) return;
-        if (e.target.closest(".pc-detail-wall-dot")) return;
-        dragging = true;
-        lastX = e.clientX;
-        lastY = e.clientY;
-        stage.classList.add("is-panning");
-        stage.setPointerCapture(e.pointerId);
-      });
-      stage.addEventListener("pointermove", function (e) {
-        if (!dragging || !selectedPlantId) return;
-        var frame = getFrame(module, selectedPlantId);
-        var rect = stage.getBoundingClientRect();
-        var dx = ((e.clientX - lastX) / Math.max(rect.width, 1)) * 100;
-        var dy = ((e.clientY - lastY) / Math.max(rect.height, 1)) * 100;
-        lastX = e.clientX;
-        lastY = e.clientY;
-        // Drag image with finger: move focus opposite to drag direction
-        frame.focusX = clamp(+(frame.focusX - dx).toFixed(1), 0, 100);
-        frame.focusY = clamp(+(frame.focusY - dy).toFixed(1), 0, 100);
-        var active = stage.querySelector(".pc-detail-wall-slide-media.is-active");
-        if (active) {
-          active.style.setProperty("--zoom", String(frame.zoom));
-          active.style.setProperty("--focus-x", frame.focusX + "%");
-          active.style.setProperty("--focus-y", frame.focusY + "%");
-        }
-      });
-      function endPan() {
-        if (!dragging) return;
-        dragging = false;
-        stage.classList.remove("is-panning");
-        renderDetail();
-      }
-      stage.addEventListener("pointerup", endPan);
-      stage.addEventListener("pointercancel", endPan);
-    });
-  }
-
   function bindCarousels(root) {
     root.querySelectorAll("[data-pc-carousel]").forEach(function (el) {
       if (el.dataset.pcBound) return;
       el.dataset.pcBound = "1";
-      var medias = Array.prototype.slice.call(el.querySelectorAll(".pc-detail-wall-slide-media"));
-      var copies = Array.prototype.slice.call(el.querySelectorAll(".pc-detail-wall-slide-copy"));
+      var slides = Array.prototype.slice.call(el.querySelectorAll(".pc-detail-wall-slide"));
       var dots = Array.prototype.slice.call(el.querySelectorAll(".pc-detail-wall-dot"));
-      var count = Math.max(medias.length, copies.length);
+      var count = slides.length;
       var moduleId = el.getAttribute("data-module-id");
       var pauseAuto =
         moduleId && moduleId === selectedModuleId && selectedPlantId;
 
-      function show(i) {
-        var index = ((i % count) + count) % count;
-        medias.forEach(function (node, n) {
-          node.classList.toggle("is-active", n === index);
+      if (count === 0) return;
+      if (count <= 1) return;
+
+      var index = 0;
+      function plantIdOf(slide) {
+        return String((slide && slide.getAttribute("data-plant-id")) || "").toLowerCase();
+      }
+
+      function currentIndex() {
+        if (moduleId === selectedModuleId && selectedPlantId) {
+          var want = String(selectedPlantId).toLowerCase();
+          var byPlant = slides.findIndex(function (s) {
+            return plantIdOf(s) === want;
+          });
+          if (byPlant >= 0) return byPlant;
+        }
+        var byActive = slides.findIndex(function (s) {
+          return s.classList.contains("is-active");
         });
-        copies.forEach(function (node, n) {
-          node.classList.toggle("is-active", n === index);
-        });
-        dots.forEach(function (node, n) {
-          node.classList.toggle("is-active", n === index);
+        return byActive >= 0 ? byActive : index;
+      }
+
+      function syncDots(active) {
+        dots.forEach(function (dot) {
+          var on = parseInt(dot.getAttribute("data-slide-to") || "-1", 10) === active;
+          dot.classList.toggle("is-active", on);
+          dot.setAttribute("aria-selected", on ? "true" : "false");
         });
       }
 
+      function show(i) {
+        index = ((i % count) + count) % count;
+        slides.forEach(function (node, n) {
+          node.classList.toggle("is-active", n === index);
+        });
+        syncDots(index);
+      }
+
+      function goTo(nextIndex) {
+        nextIndex = ((nextIndex % count) + count) % count;
+        var slide = slides[nextIndex];
+        var plantId = slide && slide.getAttribute("data-plant-id");
+        if (moduleId === selectedModuleId && plantId) {
+          selectedPlantId = plantId;
+          renderDetail();
+          refreshPreview();
+          return;
+        }
+        show(nextIndex);
+      }
+
       dots.forEach(function (dot) {
-        dot.addEventListener("click", function () {
-          var plantId = dot.getAttribute("data-plant-id");
-          if (moduleId === selectedModuleId && plantId) {
-            selectedPlantId = plantId;
-            renderDetail();
-            refreshPreview();
-            return;
-          }
-          show(parseInt(dot.getAttribute("data-slide-to") || "0", 10));
+        dot.addEventListener("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          goTo(parseInt(dot.getAttribute("data-slide-to") || "0", 10));
         });
       });
 
-      if (pauseAuto || count <= 1) return;
+      // 進頁先對齊作用中投影片（避免多張同時佔高）
+      show(currentIndex());
 
-      var index = 0;
-      var intervalMs = parseInt(el.getAttribute("data-interval") || "5500", 10) || 5500;
+      if (pauseAuto) return;
+
+      var intervalMs = parseInt(el.getAttribute("data-interval") || "8500", 10) || 8500;
       var timer = setInterval(function () {
-        index = (index + 1) % count;
+        index = (currentIndex() + 1) % count;
         show(index);
       }, intervalMs);
       el.addEventListener("mouseenter", function () {
@@ -1044,7 +1260,7 @@
       el.addEventListener("mouseleave", function () {
         clearInterval(timer);
         timer = setInterval(function () {
-          index = (index + 1) % count;
+          index = (currentIndex() + 1) % count;
           show(index);
         }, intervalMs);
       });
@@ -1053,6 +1269,8 @@
 
   function refreshPreview() {
     if (!previewEl) return;
+    var shell = previewEl.querySelector(".pc-shell");
+    var scrollTop = shell ? shell.scrollTop : 0;
     pinBannerFirst();
     var html = layout.modules
       .filter(function (m) {
@@ -1062,18 +1280,18 @@
       .join("");
     var header =
       '<header class="pc-site-header">' +
-      '<a class="pc-brand" href="/Plant">我的植栽</a>' +
+      '<a class="pc-brand" href="/Plant/List">我的植栽</a>' +
       '<nav class="pc-nav" aria-label="主選單">' +
       '<a href="/Plant">首頁</a>' +
+      '<a href="/Plant/List">我的植栽</a>' +
       '<a href="/Plant/Create">新增植栽</a>' +
       '<a href="/Settings">設定</a>' +
       "</nav></header>";
     previewEl.innerHTML = '<div class="pc-shell is-preview">' + header + html + "</div>";
+    var newShell = previewEl.querySelector(".pc-shell");
+    if (newShell) newShell.scrollTop = scrollTop;
     bindCarousels(previewEl);
-    bindFramingGestures(previewEl);
-    if (typeof window.pcBindChrome === "function") {
-      window.pcBindChrome(previewEl.querySelector(".pc-shell"));
-    }
+    // 預覽頂欄改靜態，不綁首頁 chrome（避免 sticky／絕對定位干擾）
   }
 
   if (addBtn && addTypeEl) {
@@ -1082,7 +1300,7 @@
       var mod = createModule(addTypeEl.value);
       layout.modules.push(mod);
       pinBannerFirst();
-      if (mod.type === "PlantDetailWallCarousel") {
+      if (isPlantDetailWall(mod)) {
         plantCatalogByModule[mod.id] = catalogFor(mod.id).slice();
         ensureFrames(mod);
         selectModule(mod.id);
@@ -1096,8 +1314,36 @@
   formEl.addEventListener("submit", function () {
     pinBannerFirst();
     layout.modules.forEach(function (m) {
-      if (m.type === "PlantDetailWallCarousel") ensureFrames(m);
-      else m.slideFrames = [];
+      // 統一 type 字串，避免數字／大小寫導致 slideFrames 被清空
+      if (m.type == null && m.Type != null) m.type = m.Type;
+      m.type = moduleType(m);
+
+      if (isPlantDetailWall(m)) {
+        m.type = "PlantDetailWallCarousel";
+        ensureFrames(m);
+        m.slideFrames = (m.slideFrames || [])
+          .map(function (f) {
+            var pid = String(f.plantId || "").trim();
+            if (!pid || pid.indexOf("00000000") === 0) return null;
+            return {
+              plantId: pid,
+              zoom: 1,
+              focusX: 50,
+              focusY: 50,
+              sourceZoom: 1,
+              sourceFocusX: 50,
+              sourceFocusY: 50,
+              effectImageId: f.effectImageId || null,
+              effectImageIsComposedFinal: !!f.effectImageIsComposedFinal,
+              effectImageUrl: f.effectImageUrl || null,
+              cardX: clamp(parseFloat(f.cardX) || 6, 0, 72),
+              cardY: clamp(parseFloat(f.cardY) || 22, 0, 78)
+            };
+          })
+          .filter(Boolean);
+      } else {
+        m.slideFrames = [];
+      }
       if (m.type === "Banner") m.enabled = true;
     });
     layout.version = 2;
@@ -1105,6 +1351,14 @@
       version: layout.version,
       modules: layout.modules
     });
+  });
+
+  // Normalize module types once at boot (numeric enum → name)
+  layout.modules.forEach(function (m) {
+    if (isPlantDetailWall(m)) m.type = "PlantDetailWallCarousel";
+    else if (moduleType(m) === "6" || moduleType(m) === "NotificationReminders")
+      m.type = "NotificationReminders";
+    else if (moduleType(m) === "0" || moduleType(m) === "Banner") m.type = "Banner";
   });
 
   pinBannerFirst();

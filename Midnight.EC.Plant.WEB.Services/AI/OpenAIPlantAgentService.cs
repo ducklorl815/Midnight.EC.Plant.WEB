@@ -1,136 +1,102 @@
-﻿using System.Net.Http.Headers;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Midnight.EC.Plant.WEB.Models.AI;
 using Midnight.EC.Plant.WEB.Models.Enums;
-using Midnight.EC.Plant.WEB.Services.Configuration;
-using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Utility.Json;
 
 namespace Midnight.EC.Plant.WEB.Services.AI;
 
-public class OpenAIPlantAgentService : IAIAgentService
+public class OpenAIPlantAgentService
 {
     public const string PromptVersion = "plant-analysis-v9";
 
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly AiOptions _options;
+    private readonly IChatCompletionEnvelope _chat;
     private readonly ILogger<OpenAIPlantAgentService> _logger;
 
     public OpenAIPlantAgentService(
-        IHttpClientFactory httpClientFactory,
-        IOptions<AiOptions> options,
+        IChatCompletionEnvelope chat,
         ILogger<OpenAIPlantAgentService> logger)
     {
-        _httpClientFactory = httpClientFactory;
-        _options = options.Value;
+        _chat = chat;
         _logger = logger;
     }
 
     public async Task<PlantAnalysisResultDto> AnalyzePlantAsync(PlantAnalysisContext context, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_options.OpenAI.ApiKey))
-        {
-            _logger.LogWarning("OpenAI API key is not configured. Returning placeholder analysis.");
-            return CreatePlaceholderResult(context);
-        }
-
-        var client = _httpClientFactory.CreateClient("OpenAI");
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.OpenAI.ApiKey);
-
         var prompt = BuildPrompt(context);
-        object userMessage;
+        ChatCompletionMessage userMessage;
         if (!string.IsNullOrWhiteSpace(context.FocusImageAbsolutePath) && File.Exists(context.FocusImageAbsolutePath))
         {
             var bytes = await File.ReadAllBytesAsync(context.FocusImageAbsolutePath, cancellationToken);
             var base64 = Convert.ToBase64String(bytes);
             var mime = context.FocusImageContentType ?? "image/jpeg";
-            userMessage = new
+            userMessage = new ChatCompletionMessage
             {
-                role = "user",
-                content = new object[]
-                {
-                    new { type = "text", text = prompt },
-                    new { type = "image_url", image_url = new { url = $"data:{mime};base64,{base64}" } }
-                }
+                Role = "user",
+                Parts =
+                [
+                    ChatContentPart.FromText(prompt),
+                    ChatContentPart.FromImageDataUrl($"data:{mime};base64,{base64}")
+                ]
             };
         }
         else
         {
-            userMessage = new { role = "user", content = prompt };
+            userMessage = new ChatCompletionMessage { Role = "user", Text = prompt };
         }
-
-        var payload = new
-        {
-            model = _options.OpenAI.Model,
-            response_format = new { type = "json_object" },
-            messages = new object[]
-            {
-                new
-                {
-                    role = "system",
-                    content = """
-                        你是植栽照護助理，服務對象為台灣／繁體中文使用者。
-                        【語言強制】所有給使用者閱讀的文字必須使用繁體中文（台灣用字），禁止簡體中文；學名、URL、數字可維持原文。
-                        JSON 欄位名稱維持英文字鍵；欄位值用繁體中文。
-                        命名：以學名為準；若有使用者中文名可用，勿自行發明其他中文俗名。
-                        【診斷優先】這是針對該盆／該張照片的診斷，不是百科罐頭文。summary 只需一句導語；細節放在陣列欄位。
-                        必須區分：observations（已觀察到的視覺／備註事實）、possibleIssues（可能原因，語氣保持「可能」）、recommendations（可執行建議作法）。
-                        【實際環境】若提供實際位置／日照／遮雨／介質／水盤，必須對照物種需求寫出落差，並在 recommendations 與 wateringAdvice 給出具體修正（例如澆水節奏、見乾見濕、移到半日照），不可只寫「可能與水分或光照有關」。
-                        【養分假說】若視覺或備註暗示缺素，輸出 nutrientHypotheses 陣列：每筆 { nutrient, likelihood(高|中|低), visualClues, caveat }；caveat 必須含「單憑照片無法確診」；不可寫成確診。
-                        【施肥】fertilizerAdvice 僅當可能原因與養分／施肥相關時才輸出 { type, npkHint, dilution, dilutionStrong, dilutionMild, frequency, notes }；與本次症狀無關則省略或 null，禁止每次塞平衡肥罐頭。
-                        只能根據提供的資料判斷，不確定時必須說不確定，不可直接宣稱植物得病或確診缺素。
-                        若引用外部來源，請在 citations 陣列中標記 sourceTitle、sourceUrl、reliabilityLevel、usedFor。
-                        優先參考 reliabilityLevel 較低（數字越小越可靠）的來源。
-                        若使用者提供照片，請仔細觀察葉片、莖部、顏色、斑點、蟲害等視覺特徵，並結合使用者備註分析。
-                        輸出 JSON 欄位：summary, healthScore, observations, possibleIssues, nutrientHypotheses, environmentAssessment, recommendations, warning, citations, growthTrend, wateringAdvice, pestRisk, alerts, confidence, needsHumanReview, fertilizerAdvice(條件)。
-                        【型別強制】observations、possibleIssues、recommendations、warning、alerts 必須是字串陣列（string[]），即使只有一條也要用 ["…"]，不可回傳單一字串。
-                        nutrientHypotheses 必須是物件陣列（可為 []）。
-                        environmentAssessment 必須是物件 { light, water, humidity, temperature }（各為字串），不可回傳單一字串；light／water 應寫評估與建議方向。
-                        healthScore 為 0–100 整數；confidence 為 0–1 小數（不可用百分比字串）；needsHumanReview 為布林值。
-                        """
-                },
-                userMessage
-            }
-        };
-
-        var requestJson = JsonSerializer.Serialize(payload);
-        using var response = await client.PostAsync(
-            "chat/completions",
-            new StringContent(requestJson, Encoding.UTF8, "application/json"),
-            cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadAsStringAsync(cancellationToken);
-            _logger.LogError("OpenAI analysis failed: {Error}", error);
-            throw new InvalidOperationException("AI 分析失敗。");
-        }
-
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
-        var content = document.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
-
-        content = StripMarkdownFence(content);
 
         try
         {
-            var result = JsonHelper.Deserialize<PlantAnalysisResultDto>(content ?? "{}")
-                ?? CreatePlaceholderResult(context);
-            return result;
+            var content = await _chat.CompleteAsync(
+                [
+                    new ChatCompletionMessage
+                    {
+                        Role = "system",
+                        Text = """
+                            你是植栽照護助理，服務對象為台灣／繁體中文使用者。
+                            【語言強制】所有給使用者閱讀的文字必須使用繁體中文（台灣用字），禁止簡體中文；學名、URL、數字可維持原文。
+                            JSON 欄位名稱維持英文字鍵；欄位值用繁體中文。
+                            命名：以學名為準；若有使用者中文名可用，勿自行發明其他中文俗名。
+                            【診斷優先】這是針對該盆／該張照片的診斷，不是百科罐頭文。summary 只需一句導語；細節放在陣列欄位。
+                            必須區分：observations（已觀察到的視覺／備註事實）、possibleIssues（可能原因，語氣保持「可能」）、recommendations（可執行建議作法）。
+                            【實際環境】若提供實際位置／日照／遮雨／介質／水盤，必須對照物種需求寫出落差，並在 recommendations 與 wateringAdvice 給出具體修正（例如澆水節奏、見乾見濕、移到半日照），不可只寫「可能與水分或光照有關」。
+                            【養分假說】若視覺或備註暗示缺素，輸出 nutrientHypotheses 陣列：每筆 { nutrient, likelihood(高|中|低), visualClues, caveat }；caveat 必須含「單憑照片無法確診」；不可寫成確診。
+                            【施肥】fertilizerAdvice 僅當可能原因與養分／施肥相關時才輸出 { type, npkHint, dilution, dilutionStrong, dilutionMild, frequency, notes }；與本次症狀無關則省略或 null，禁止每次塞平衡肥罐頭。
+                            只能根據提供的資料判斷，不確定時必須說不確定，不可直接宣稱植物得病或確診缺素。
+                            若引用外部來源，請在 citations 陣列中標記 sourceTitle、sourceUrl、reliabilityLevel、usedFor。
+                            優先參考 reliabilityLevel 較低（數字越小越可靠）的來源。
+                            若使用者提供照片，請仔細觀察葉片、莖部、顏色、斑點、蟲害等視覺特徵，並結合使用者備註分析。
+                            輸出 JSON 欄位：summary, healthScore, observations, possibleIssues, nutrientHypotheses, environmentAssessment, recommendations, warning, citations, growthTrend, wateringAdvice, pestRisk, alerts, confidence, needsHumanReview, fertilizerAdvice(條件)。
+                            【型別強制】observations、possibleIssues、recommendations、warning、alerts 必須是字串陣列（string[]），即使只有一條也要用 ["…"]，不可回傳單一字串。
+                            nutrientHypotheses 必須是物件陣列（可為 []）。
+                            environmentAssessment 必須是物件 { light, water, humidity, temperature }（各為字串），不可回傳單一字串；light／water 應寫評估與建議方向。
+                            healthScore 為 0–100 整數；confidence 為 0–1 小數（不可用百分比字串）；needsHumanReview 為布林值。
+                            """
+                    },
+                    userMessage
+                ],
+                cancellationToken: cancellationToken);
+
+            try
+            {
+                var result = JsonHelper.Deserialize<PlantAnalysisResultDto>(content)
+                    ?? CreatePlaceholderResult(context);
+                return result;
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Plant analysis JSON parse failed. Content: {Content}",
+                    content is { Length: > 800 } ? content[..800] + "…" : content);
+                throw;
+            }
         }
-        catch (JsonException ex)
+        catch (ChatCompletionException ex) when (ex.Message.Contains("ApiKey", StringComparison.Ordinal))
         {
-            _logger.LogError(
-                ex,
-                "Plant analysis JSON parse failed. Content: {Content}",
-                content is { Length: > 800 } ? content[..800] + "…" : content);
-            throw;
+            _logger.LogWarning("OpenAI API key is not configured. Returning placeholder analysis.");
+            return CreatePlaceholderResult(context);
         }
     }
 

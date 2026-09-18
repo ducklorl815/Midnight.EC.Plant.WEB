@@ -18,6 +18,8 @@ public class PlantCareRecordModel
     public Guid PlantId { get => PlantID; set => PlantID = value; }
     public DateTime RecordDate { get; set; }
     public CareRecordType CareType { get; set; }
+    public Guid? FertilizerProductID { get; set; }
+    public Guid? FertilizerProductId { get => FertilizerProductID; set => FertilizerProductID = value; }
     public decimal? NumericValue { get; set; }
     public string? Unit { get; set; }
     public string? Note { get; set; }

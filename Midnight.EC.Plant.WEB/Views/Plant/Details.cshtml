@@ -455,11 +455,67 @@
                             <input asp-for="Profile.FertilizingIntervalDays" class="form-control form-control-sm" type="number" min="1" />
                         </div>
                         <div class="col-12">
+                            <p class="small text-muted mb-0">上方「施肥間隔」供尚未設定盆用肥料時使用；有盆用肥料後，植栽清單以各肥種週期為準。</p>
+                        </div>
+                        <div class="col-12">
                             <label asp-for="Profile.PersonalCareNotes" class="form-label small"></label>
                             <input asp-for="Profile.PersonalCareNotes" class="form-control form-control-sm" />
                         </div>
                     </div>
                     <button type="submit" class="btn btn-brand btn-sm mt-3">儲存設定</button>
+                </form>
+
+                <hr class="my-3" />
+                <h3 class="h6 mb-2">盆用肥料</h3>
+                <p class="small text-muted">為此盆自訂肥種名稱與週期（例如 A肥、B肥）。植栽清單會分別倒數並可快速施肥。</p>
+                @if (Model.FertilizerProducts.Count > 0)
+                {
+                    <ul class="list-unstyled mb-3">
+                        @foreach (var fert in Model.FertilizerProducts)
+                        {
+                            <li class="border rounded p-2 mb-2">
+                                <form asp-action="UpdateFertilizerProduct" asp-route-id="@Model.Id" method="post" class="row g-2 align-items-end">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="fertilizerProductId" value="@fert.Id" />
+                                    <div class="col-6">
+                                        <label class="form-label small mb-0">名稱</label>
+                                        <input name="Name" class="form-control form-control-sm" value="@fert.Name" maxlength="64" required />
+                                    </div>
+                                    <div class="col-3">
+                                        <label class="form-label small mb-0">間隔天</label>
+                                        <input name="IntervalDays" type="number" min="1" max="365" class="form-control form-control-sm" value="@fert.IntervalDays" required />
+                                    </div>
+                                    <div class="col-3 d-flex gap-1">
+                                        <button type="submit" class="btn btn-sm btn-outline-emphasis flex-grow-1">存</button>
+                                    </div>
+                                </form>
+                                <form asp-action="DeleteFertilizerProduct" asp-route-id="@Model.Id" method="post" class="mt-1"
+                                      onsubmit="return confirm('確定刪除此肥料？');">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="fertilizerProductId" value="@fert.Id" />
+                                    <button type="submit" class="btn btn-link btn-sm text-danger p-0">刪除</button>
+                                </form>
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <p class="small text-muted">尚未新增盆用肥料；清單會顯示單一「施肥」列。</p>
+                }
+                <form asp-action="AddFertilizerProduct" asp-route-id="@Model.Id" method="post" class="row g-2 align-items-end">
+                    @Html.AntiForgeryToken()
+                    <div class="col-6">
+                        <label asp-for="NewFertilizer.Name" class="form-label small mb-0"></label>
+                        <input asp-for="NewFertilizer.Name" class="form-control form-control-sm" placeholder="例如 A肥" />
+                    </div>
+                    <div class="col-3">
+                        <label asp-for="NewFertilizer.IntervalDays" class="form-label small mb-0"></label>
+                        <input asp-for="NewFertilizer.IntervalDays" class="form-control form-control-sm" type="number" min="1" />
+                    </div>
+                    <div class="col-3">
+                        <button type="submit" class="btn btn-sm btn-brand w-100">新增</button>
+                    </div>
                 </form>
             </div>
         </section>

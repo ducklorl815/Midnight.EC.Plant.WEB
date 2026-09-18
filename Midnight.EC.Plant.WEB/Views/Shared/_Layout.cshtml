@@ -20,7 +20,7 @@
         <header>
             <nav class="navbar navbar-expand-sm navbar-light @(wallEditor ? "mb-0 navbar-wall" : "mb-3")">
                 <div class="@(wallEditor ? "container-fluid px-3" : "container")">
-                    <a class="navbar-brand" asp-controller="Plant" asp-action="Index">
+                    <a class="navbar-brand" asp-controller="Plant" asp-action="List">
                         <span class="brand-mark" aria-hidden="true">🌿</span>我的植栽
                     </a>
                     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="選單">
@@ -30,6 +30,9 @@
                         <ul class="navbar-nav ms-auto">
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="Plant" asp-action="Index">首頁</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" asp-controller="Plant" asp-action="List">我的植栽</a>
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" asp-controller="Plant" asp-action="Create">新增植栽</a>

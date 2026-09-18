@@ -1,30 +1,5 @@
 namespace Midnight.EC.Plant.WEB.Services.Configuration;
 
-public class ExternalPlantApiOptions
-{
-    public const string SectionName = "ExternalPlantApi";
-
-    public TrefleApiOptions Trefle { get; set; } = new();
-    public INaturalistApiOptions INaturalist { get; set; } = new();
-    public GbifApiOptions GBIF { get; set; } = new();
-}
-
-public class TrefleApiOptions
-{
-    public string BaseUrl { get; set; } = "https://trefle.io/api/v1/";
-    public string ApiKey { get; set; } = string.Empty;
-}
-
-public class INaturalistApiOptions
-{
-    public string BaseUrl { get; set; } = "https://api.inaturalist.org/v1/";
-}
-
-public class GbifApiOptions
-{
-    public string BaseUrl { get; set; } = "https://api.gbif.org/v1/";
-}
-
 public class AiOptions
 {
     public const string SectionName = "AI";
@@ -37,7 +12,13 @@ public class OpenAiOptions
 {
     public string BaseUrl { get; set; } = "https://api.openai.com/v1/";
     public string ApiKey { get; set; } = string.Empty;
+    /// <summary>Chat / Vision 模型（分析、照護知識、找種）。</summary>
     public string Model { get; set; } = "gpt-4o-mini";
+    /// <summary>Image edits / generation 模型。</summary>
+    public string ImageModel { get; set; } = "gpt-image-1";
+    /// <summary>Landscape effect base (~16:9 feel). OpenAI allows 1536x1024.</summary>
+    public string ImageSize { get; set; } = "1536x1024";
+    public string ImageQuality { get; set; } = "medium";
 }
 
 public class StorageOptions

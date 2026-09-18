@@ -6,13 +6,13 @@ public class PlantDetailWallSlideDto
     public string DisplayName { get; set; } = string.Empty;
     public string? ScientificName { get; set; }
     public string Intro { get; set; } = "尚無介紹";
+    public Guid? CoverImageId { get; set; }
     public string? CoverImagePath { get; set; }
-    /// <summary>Display scale within the frame.</summary>
-    public double Zoom { get; set; } = 1;
-    /// <summary>Focus X as percent 0..100 (50 = centered pan).</summary>
-    public double FocusX { get; set; } = 50;
-    /// <summary>Focus Y as percent 0..100 (50 = centered pan).</summary>
-    public double FocusY { get; set; } = 50;
+    public Guid? LatestEffectImageId { get; set; }
+    public string? LatestEffectImageUrl { get; set; }
+    public string? LeftImagePath { get; set; }
+    public double CardX { get; set; } = 6;
+    public double CardY { get; set; } = 22;
     public List<PlantDetailWallCareFactDto> CareFacts { get; set; } = [];
 }
 

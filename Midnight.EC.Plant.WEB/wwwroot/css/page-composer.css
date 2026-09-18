@@ -4,12 +4,15 @@
   --pc-ink: #1c241c;
   --pc-muted: #5a665a;
   --pc-paper: #fff;
+  --pc-stage-bg: #fff;
   --pc-leaf: #3d6b4f;
   --pc-leaf-deep: #2a4a36;
   --pc-clay: #8b6b4a;
   --pc-fern: #4f6f52;
   --pc-stone: #6d6a63;
-  --pc-module-gap: 5rem;
+  /* 模組與模組之間唯一外距來源 */
+  --pc-module-gap: 3rem;
+  --pc-shell-max-width: 1440px;
   --pc-moss-grad: linear-gradient(145deg, #3d6b4f 0%, #1e3326 55%, #0f1c14 100%);
   --pc-clay-grad: linear-gradient(145deg, #a8845c 0%, #6b4e35 60%, #3d2c1c 100%);
   --pc-fern-grad: linear-gradient(145deg, #6a8f6e 0%, #3a5a3e 55%, #1f3022 100%);
@@ -17,54 +20,108 @@
   --pc-banner-grad: linear-gradient(160deg, #2f4a38 0%, #1a2e22 45%, #0d1812 100%);
 }
 
+.home-chrome,
+.wall-editor-chrome {
+  background: #e9efea;
+}
+
+.home-chrome {
+  /* 避免 Banner 全寬延展造成橫向捲軸 */
+  overflow-x: clip;
+}
+
+.home-fluid {
+  padding-left: clamp(0.75rem, 2vw, 1.5rem);
+  padding-right: clamp(0.75rem, 2vw, 1.5rem);
+}
+
 .home-chrome .pc-shell,
 .pc-shell {
-  width: 100%;
+  width: min(100%, var(--pc-shell-max-width));
+  margin-inline: auto;
   color: var(--pc-ink);
   background: var(--pc-paper);
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--pc-module-gap, 5rem);
+  /* 間距改由相鄰 .pc-module 的 margin-top 負責，避免被當成「內部空白」 */
+  gap: 0;
+  box-shadow: 0 18px 44px rgba(28, 36, 28, 0.08);
+}
+
+/* 所有內容模組之間同一間距（含細節牆 → 下一個） */
+.pc-shell > .pc-module {
+  flex: 0 0 auto;
+}
+
+.pc-shell > .pc-module + .pc-module {
+  margin-top: var(--pc-module-gap, 3rem) !important;
 }
 
 .pc-shell.is-preview {
-  --pc-module-gap: 3.25rem;
+  --pc-module-gap: 3rem;
   border: 1px solid rgba(28, 36, 28, 0.12);
-  max-height: min(70vh, 720px);
+  width: 100%;
+  max-height: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: auto;
   border-radius: 2px;
   position: relative;
+  overscroll-behavior: contain;
 }
 
-/* 滾動態殼層：一進頁即 fixed；過 Banner 前透明，過後白底 */
+/* 預覽頂欄：靜態、不 sticky，避免蓋住第一個模組／捲不到頂 */
+.pc-shell.is-preview .pc-site-header {
+  position: static;
+  top: auto;
+  left: auto;
+  right: auto;
+  width: 100%;
+  transform: none;
+  flex: 0 0 auto;
+  padding: 0.75rem 1.25rem;
+  background: rgba(255, 255, 255, 0.97);
+  border-bottom: 1px solid rgba(28, 36, 28, 0.08);
+  box-shadow: none;
+  z-index: 1;
+}
+
+.pc-shell.is-preview .pc-site-header .pc-brand {
+  color: var(--pc-leaf-deep);
+}
+
+.pc-shell.is-preview .pc-site-header .pc-nav a {
+  color: var(--pc-muted);
+}
+
+.pc-shell.is-preview .pc-site-header .pc-nav a:hover {
+  color: var(--pc-leaf-deep);
+}
+
+/* 滾動態殼層：首頁 fixed；過 Banner 後白底 */
 .pc-site-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.95rem 1.25rem;
+  padding: 0.95rem max(1.25rem, calc((100vw - min(100vw, var(--pc-shell-max-width))) / 2 + 1.25rem));
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
+  width: 100%;
+  transform: none;
   z-index: 40;
   background: transparent;
   border-bottom: 1px solid rgba(255, 255, 255, 0.22);
   transition: background-color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  box-sizing: border-box;
 }
 
 .pc-site-header.is-sticky {
   background: rgba(255, 255, 255, 0.97);
   border-bottom-color: rgba(28, 36, 28, 0.08);
   box-shadow: 0 12px 36px rgba(28, 36, 28, 0.08);
-}
-
-/* 預覽容器內：absolute + JS 同步 scrollTop，才能疊在 Banner 上又跟著捲 */
-.pc-shell.is-preview .pc-site-header {
-  position: absolute;
-  left: 0;
-  right: 0;
 }
 
 .pc-brand {
@@ -129,17 +186,42 @@
   opacity: 0.9;
 }
 
-/* Banner：首屏主視覺 + 底緣大弧切邊；外距 = 殼層 gap + 自身同值 margin（Q1 A 疊加） */
+/* Banner：首屏主視覺 + 底緣大弧切邊；模組間距只靠殼層 gap，避免雙重 margin 亂跳 */
 .pc-module.pc-banner {
   position: relative;
-  min-height: min(88vh, 720px);
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  max-height: min(88vh, 810px);
   display: grid;
   align-items: end;
   overflow: hidden;
   color: #ffffff;
   padding: 0;
-  margin: 0 0 var(--pc-module-gap, 5rem);
+  /* margin-top 由 .pc-shell > .pc-module + .pc-module 統一給 */
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: 0;
   border-bottom-right-radius: min(42vw, 320px);
+  background: var(--pc-banner-grad);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 首頁：只有背景／主圖全寬；文案與 CTA 仍在殼層寬度內 */
+.pc-shell:not(.is-preview) > .pc-module.pc-banner {
+  overflow: visible;
+  background: transparent;
+  border-bottom-right-radius: 0;
+}
+
+.pc-shell:not(.is-preview) > .pc-module.pc-banner .pc-banner-media {
+  left: 50%;
+  right: auto;
+  width: 100vw;
+  transform: translateX(-50%);
+  border-bottom-right-radius: min(42vw, 320px);
+  overflow: hidden;
+  background: var(--pc-banner-grad);
 }
 
 .theme-banner {
@@ -149,6 +231,7 @@
 .pc-banner-media {
   position: absolute;
   inset: 0;
+  background: var(--pc-banner-grad);
 }
 
 .pc-banner-media img,
@@ -156,6 +239,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center center;
   display: block;
 }
 
@@ -181,8 +265,11 @@
 .pc-banner-content {
   position: relative;
   z-index: 1;
-  padding: clamp(4.5rem, 10vw, 6.5rem) clamp(1.25rem, 5vw, 4rem) clamp(3rem, 8vw, 5.5rem);
+  justify-self: start;
+  width: min(100%, 40rem);
   max-width: 40rem;
+  padding: clamp(4.5rem, 10vw, 6.5rem) clamp(1.25rem, 5vw, 4rem) clamp(3rem, 8vw, 5.5rem);
+  box-sizing: border-box;
 }
 
 .pc-banner-title {
@@ -216,9 +303,9 @@
   color: var(--pc-ink);
 }
 
-/* Shared module typography；外距統一由 .pc-shell gap 負責，避免被單一模組覆寫 */
+/* Shared module：垂直外距只靠 .pc-shell gap，避免細節牆（padding:0）貼齊、其他模組雙倍拉開 */
 .pc-module {
-  padding: clamp(2.5rem, 7vw, 5rem) clamp(1.25rem, 5vw, 4rem);
+  padding: 0 clamp(1.25rem, 5vw, 4rem);
   margin: 0;
 }
 
@@ -272,21 +359,27 @@
   min-height: 160px;
 }
 
-/* Split image/text */
+/* Split image/text — 高度隨內容，勿用 70vh/560 撐高造成「模組間超遠」假象 */
 .pc-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: clamp(1.25rem, 4vw, 3rem);
-  align-items: center;
-  min-height: min(70vh, 560px);
+  align-items: start;
+  min-height: 0;
+}
+
+.pc-split-media {
+  aspect-ratio: 4 / 3;
+  background: var(--pc-stage-bg);
 }
 
 .pc-split-media img,
 .pc-split-media .pc-placeholder-visual {
   width: 100%;
-  min-height: min(56vh, 480px);
+  min-height: 0;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: var(--pc-stage-bg);
 }
 
 .pc-split-copy {
@@ -321,8 +414,9 @@
 .pc-multi-text-media .pc-placeholder-visual {
   width: 100%;
   aspect-ratio: 4 / 3;
-  object-fit: cover;
+  object-fit: contain;
   min-height: 0;
+  background: var(--pc-stage-bg);
 }
 
 /* Multi image style */
@@ -341,8 +435,9 @@
 .pc-multi-image-cell .pc-placeholder-visual {
   width: 100%;
   aspect-ratio: 5 / 4;
-  object-fit: cover;
+  object-fit: contain;
   min-height: 0;
+  background: var(--pc-stage-bg);
 }
 
 .pc-caption {
@@ -351,26 +446,32 @@
   color: var(--pc-muted);
 }
 
-/* Admin editor */
+/* Admin editor — 單欄可捲：左側設定、右側預覽，避免整頁＋預覽雙捲軸 */
 .pc-editor {
   display: grid;
-  grid-template-columns: minmax(280px, 360px) 1fr;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   gap: 1rem;
-  min-height: calc(100vh - 4rem);
-  align-items: start;
+  align-items: stretch;
+  height: calc(100vh - 3.25rem);
+  max-height: calc(100vh - 3.25rem);
+  padding: 0.75rem;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .pc-editor-side {
-  position: sticky;
-  top: 0.75rem;
+  position: relative;
+  top: auto;
   display: flex;
   flex-direction: column;
   gap: 1rem;
   padding: 1rem;
   background: #fff;
   border: 1px solid rgba(28, 36, 28, 0.1);
-  max-height: calc(100vh - 1.5rem);
+  max-height: 100%;
   overflow: auto;
+  align-self: stretch;
+  min-height: 0;
 }
 
 .pc-editor-side h1 {
@@ -380,6 +481,26 @@
 
 .pc-editor-canvas {
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  height: 100%;
+  position: relative;
+  top: auto;
+  overflow: hidden;
+}
+
+.pc-editor-canvas > .small {
+  flex: 0 0 auto;
+}
+
+#pc-live-preview {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .pc-module-list {
@@ -578,12 +699,61 @@
   gap: 0.35rem;
 }
 
+.pc-frame-group-label {
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #3d453d;
+}
+
+.pc-frame-group-label:first-child {
+  margin-top: 0;
+}
+
+.pc-frame-group-label .pc-frame-hint {
+  font-weight: 400;
+  color: #6b736b;
+  margin-left: 0.35rem;
+}
+
 .pc-frame-fields label {
   font-size: 0.7rem;
   color: var(--pc-muted, #5a665a);
   margin: 0;
   display: grid;
   gap: 0.15rem;
+}
+
+.pc-frame-effect-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.pc-frame-effect-status {
+  min-height: 1.1em;
+}
+
+.pc-frame-effect-preview {
+  margin-top: 0.35rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px dashed rgba(61, 107, 79, 0.45);
+  background: #fff;
+}
+
+.pc-frame-effect-preview.is-applied {
+  border-style: solid;
+}
+
+.pc-frame-effect-preview img {
+  display: block;
+  width: 100%;
+  height: 160px;
+  max-height: 160px;
+  object-fit: contain;
+  background: var(--pc-stage-bg);
 }
 
 .pc-frame-scale {
@@ -605,7 +775,11 @@
 }
 
 .pc-editor-canvas .pc-shell.is-preview {
-  max-height: min(78vh, 860px);
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  height: 100%;
+  --pc-module-gap: 3rem;
 }
 
 .pc-module-handle {
@@ -663,11 +837,26 @@
 
   .pc-editor {
     grid-template-columns: 1fr;
+    max-height: none;
+    height: auto;
+    overflow: visible;
   }
 
   .pc-editor-side {
     position: static;
     max-height: none;
+  }
+
+  .pc-editor-canvas {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .pc-editor-canvas .pc-shell.is-preview {
+    min-height: min(70vh, 720px);
+    height: auto;
+    max-height: min(80vh, 900px);
   }
 }
 
@@ -685,12 +874,15 @@
 /* Plant detail wall carousel — bg from site chrome; no local wash */
 .pc-module.pc-detail-wall {
   position: relative;
-  min-height: min(72vh, 580px);
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding: 0;
-  margin: 0; /* 外距由殼層 gap 統一；勿再寫成「吃掉間距」的特例語意 */
+  justify-content: flex-start;
+  flex: 0 0 auto;
+  padding: 0 clamp(1.25rem, 5vw, 4rem);
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: 0;
   background: transparent;
   color: inherit;
 }
@@ -700,96 +892,204 @@
 }
 
 .pc-detail-wall-carousel {
+  --pc-detail-wall-gap: clamp(1.25rem, 4vw, 3rem);
   width: 100%;
   margin: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.pc-detail-wall-slides {
+  display: block;
+  position: relative;
+  width: 100%;
+  min-height: 0;
+}
+
+/* 非作用中用 display:none，避免 absolute 殘留幽靈高度把下一個模組推遠 */
+.pc-detail-wall-slide {
+  display: none;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--pc-detail-wall-gap, clamp(1.25rem, 4vw, 3rem));
+  align-items: start;
+  width: 100%;
+  background: #fff;
+  color: var(--pc-ink);
+  overflow: visible;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 0;
+}
+
+.pc-detail-wall-slide.is-active {
+  display: grid;
 }
 
 .pc-detail-wall-card {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-columns: 1fr 1fr;
+  gap: var(--pc-detail-wall-gap, clamp(1.25rem, 4vw, 3rem));
+  align-items: stretch;
   width: 100%;
   background: #fff;
   color: var(--pc-ink);
   overflow: hidden;
   border-radius: 0;
   box-shadow: none;
-  min-height: min(72vh, 580px);
+  min-height: 0;
 }
 
+/* 媒體盒高度跟圖走，避免 1:1 強制比例造成圖下大片白底 */
 .pc-detail-wall-media {
   position: relative;
-  background: #dfe8e2;
-  min-height: 280px;
+  background: transparent;
   margin: 0;
   padding: 0;
   overflow: hidden;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: auto;
+  align-self: start;
+  justify-self: stretch;
+  border-radius: clamp(16px, 2.5vw, 28px);
 }
 
-.pc-detail-wall-slide-media {
+/* 圓點疊在左圖底部中央（只要點點，背景透明） */
+.pc-detail-wall-media > .pc-detail-wall-dots {
   position: absolute;
-  inset: 0;
-  opacity: 0;
-  transition: opacity 0.45s ease;
+  left: 50%;
+  bottom: 0.85rem;
+  transform: translateX(-50%);
+  z-index: 6;
+  width: max-content;
+  max-width: calc(100% - 1.5rem);
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.pc-detail-wall-media.is-effect {
+  background: transparent;
+}
+
+.pc-detail-wall-slide > .pc-detail-wall-media .pc-detail-wall-slide-media,
+.pc-detail-wall-slide-media {
+  position: relative;
+  inset: auto;
+  display: none;
+  width: 100%;
+  height: auto;
+  opacity: 1;
+  transition: none;
   pointer-events: none;
   overflow: hidden;
+  background: transparent;
+  border-radius: inherit;
 }
 
+.pc-detail-wall-slide > .pc-detail-wall-media .pc-detail-wall-slide-media.is-active,
 .pc-detail-wall-slide-media.is-active {
-  opacity: 1;
+  display: block;
   pointer-events: auto;
   z-index: 1;
 }
 
-.pc-detail-wall-slide-media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: var(--focus-x, 50%) var(--focus-y, 50%);
+.pc-detail-wall-slide-media .pc-detail-wall-view {
+  position: relative;
+  inset: auto;
   display: block;
-  min-height: 280px;
-  transform: scale(var(--zoom, 1));
-  transform-origin: center center;
-  will-change: object-position, transform;
+  width: 100%;
+  overflow: hidden;
+  background: transparent;
+  border-radius: inherit;
+}
+
+.pc-detail-wall-slide-media img {
+  position: static;
+  inset: auto;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: none;
+  object-fit: contain;
+  object-position: center center;
+  transform: none !important;
   user-select: none;
   -webkit-user-drag: none;
+  background: transparent;
+  border-radius: clamp(16px, 2.5vw, 28px);
+}
+
+.pc-detail-wall-slide-media.is-effect {
+  background: #fff;
+}
+
+.pc-detail-wall-slide-media.is-source-edit {
+  outline: 2px dashed rgba(2, 132, 199, 0.55);
+  outline-offset: -2px;
 }
 
 .pc-detail-wall-ph {
+  position: relative;
+  inset: auto;
   width: 100%;
-  height: 100%;
-  min-height: 280px;
+  aspect-ratio: 4 / 3;
+  min-height: 12rem;
   display: block;
+  border-radius: inherit;
+  background: #e8ece9;
 }
 
 .pc-detail-wall-dots {
-  position: absolute;
-  left: 50%;
-  bottom: 0.9rem;
-  transform: translateX(-50%);
-  z-index: 2;
   display: flex;
+  justify-content: center;
+  align-items: center;
   gap: 0.45rem;
+  list-style: none;
+  pointer-events: none;
 }
 
 .pc-detail-wall-dot {
-  width: 8px;
-  height: 8px;
+  pointer-events: auto;
+  width: 0.55rem;
+  height: 0.55rem;
   padding: 0;
-  border: 0;
+  border: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.45);
+  background: #fff;
+  opacity: 0.25; /* 未選中：透明度 75% */
+  box-shadow: none;
+  outline: none;
   cursor: pointer;
 }
 
 .pc-detail-wall-dot.is-active {
   background: #fff;
+  opacity: 1;
+}
+
+.pc-detail-wall-dot:hover {
+  opacity: 0.55;
 }
 
 .pc-detail-wall-copy {
   position: relative;
-  padding: clamp(1.4rem, 3vw, 2.5rem) clamp(1.25rem, 4vw, 3rem);
+  padding: 0;
   display: grid;
+  align-content: start;
+  align-self: start;
+  min-height: 0;
   background: #fff;
+  z-index: 2;
 }
 
 .pc-detail-wall-slide-copy {
@@ -841,14 +1141,12 @@
 }
 
 .pc-detail-wall-facts {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: auto;
-  max-height: min(18rem, 42vh);
+  overflow: visible;
+  max-height: none;
   margin: 0;
-  padding-right: 0.25rem;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* legacy Edge */
+  padding-right: 0;
 }
 
 .pc-detail-wall-facts::-webkit-scrollbar {
@@ -911,31 +1209,48 @@
 .pc-care-water.is-wet { opacity: 1; }
 
 @media (max-width: 900px) {
-  .pc-detail-wall-card {
+  .pc-detail-wall-carousel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .pc-detail-wall-card,
+  .pc-detail-wall-slide.is-active {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    min-height: 0;
+    gap: 1.25rem;
   }
 
   .pc-detail-wall-media {
-    min-height: 240px;
-    aspect-ratio: 5 / 4;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: auto;
   }
 
   .pc-detail-wall-slide-media {
-    position: absolute;
+    position: relative;
+    inset: auto;
+    border-radius: inherit;
   }
 
-  .pc-detail-wall-intro {
-    max-height: none;
+  .pc-detail-wall-media > .pc-detail-wall-dots {
+    left: 50%;
+    bottom: 0.75rem;
+    transform: translateX(-50%);
   }
 
-  .pc-detail-wall-facts {
-    max-height: none;
+  .pc-detail-wall-copy {
+    /* 手機改為圖下文，不再等高拉伸 */
+    align-self: stretch;
   }
 }
 
 /* —— 通知提醒 —— */
 .pc-module.pc-notify {
-  padding: 1rem 1.25rem 1.15rem;
+  padding: 1rem clamp(1.25rem, 5vw, 4rem) 1.15rem;
   border-top: 1px solid rgba(28, 36, 28, 0.08);
   border-bottom: 1px solid rgba(28, 36, 28, 0.08);
 }

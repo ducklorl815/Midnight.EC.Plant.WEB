@@ -6,7 +6,6 @@ using Midnight.EC.Plant.WEB.Models.External;
 using Midnight.EC.Plant.WEB.Models.Respository;
 using Midnight.EC.Plant.WEB.Services.AI;
 using Midnight.EC.Plant.WEB.Services.External;
-using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Services.PlantProfile;
 
 namespace Midnight.EC.Plant.WEB.Services.PlantKnowledge;
@@ -17,8 +16,8 @@ public class PlantKnowledgeService
     private readonly PlantKnowledgeRespo _knowledgeRepository;
     private readonly PlantRespo _plantRepository;
     private readonly PlantProfileRespo _profileRepository;
-    private readonly IOpenAISpeciesFinderService _speciesFinder;
-    private readonly ICareKnowledgeSynthesisService _careSynthesisService;
+    private readonly CareKnowledgeSynthesisService _careSynthesisService;
+    private readonly EnvironmentFitService _environmentFitService;
     private readonly PlantProfileService _profileService;
     private readonly ILogger<PlantKnowledgeService> _logger;
 
@@ -27,8 +26,8 @@ public class PlantKnowledgeService
         PlantKnowledgeRespo knowledgeRepository,
         PlantRespo plantRepository,
         PlantProfileRespo profileRepository,
-        IOpenAISpeciesFinderService speciesFinder,
-        ICareKnowledgeSynthesisService careSynthesisService,
+        CareKnowledgeSynthesisService careSynthesisService,
+        EnvironmentFitService environmentFitService,
         PlantProfileService profileService,
         ILogger<PlantKnowledgeService> logger)
     {
@@ -36,8 +35,8 @@ public class PlantKnowledgeService
         _knowledgeRepository = knowledgeRepository;
         _plantRepository = plantRepository;
         _profileRepository = profileRepository;
-        _speciesFinder = speciesFinder;
         _careSynthesisService = careSynthesisService;
+        _environmentFitService = environmentFitService;
         _profileService = profileService;
         _logger = logger;
     }
@@ -46,18 +45,6 @@ public class PlantKnowledgeService
     {
         var knowledge = await _knowledgeRepository.GetBySpeciesIdAsync(speciesId, cancellationToken);
         return knowledge?.ToDto();
-    }
-
-    public async Task<Midnight.EC.Plant.WEB.Models.DTOs.PlantKnowledgeDto> SyncFromExternalAsync(Guid speciesId, string speciesKeyword, CancellationToken cancellationToken = default)
-    {
-        var existing = await _knowledgeRepository.GetBySpeciesIdAsync(speciesId, cancellationToken);
-        if (existing != null)
-        {
-            return existing.ToDto();
-        }
-
-        var refreshed = await RefreshFromExternalAsync(speciesId, speciesKeyword, cancellationToken);
-        return refreshed.Knowledge;
     }
 
     public async Task<EnvironmentFitResult> RefreshEnvironmentAdviceAsync(Guid plantId, CancellationToken cancellationToken = default)
@@ -129,7 +116,7 @@ public class PlantKnowledgeService
         };
 
         var displayName = plant.NickName ?? plant.Name;
-        var fit = await _careSynthesisService.SynthesizeEnvironmentFitAsync(
+        var fit = await _environmentFitService.RefreshAsync(
             displayName,
             plant.Species.ScientificName,
             knowledge,
@@ -144,50 +131,23 @@ public class PlantKnowledgeService
         return fit;
     }
 
+    public Task<KnowledgeRefreshResult> RefreshAsync(Guid speciesId, string speciesKeyword, CancellationToken cancellationToken = default) =>
+        RefreshCoreAsync(speciesId, speciesKeyword, cancellationToken);
+
     public Task<KnowledgeRefreshResult> RefreshFromExternalAsync(Guid speciesId, string speciesKeyword, CancellationToken cancellationToken = default) =>
-        RefreshFromExternalAsync(speciesId, speciesKeyword, null, null, cancellationToken);
+        RefreshAsync(speciesId, speciesKeyword, cancellationToken);
 
-    public async Task<KnowledgeRefreshResult> RefreshFromExternalAsync(
+    private async Task<KnowledgeRefreshResult> RefreshCoreAsync(
         Guid speciesId,
-        string? speciesKeyword,
-        Stream? identificationImage,
-        string? imageFileName,
-        CancellationToken cancellationToken = default)
-    {
-        var keyword = speciesKeyword?.Trim() ?? string.Empty;
-        if (identificationImage != null)
-        {
-            var candidates = await _speciesFinder.FindByImageAsync(
-                identificationImage,
-                imageFileName ?? "plant.jpg",
-                string.IsNullOrWhiteSpace(keyword) ? null : keyword,
-                cancellationToken);
-            var top = candidates.FirstOrDefault();
-            if (top != null)
-            {
-                keyword = top.ScientificName;
-                _logger.LogInformation("Identified plant as {ScientificName} via OpenAI", top.ScientificName);
-            }
-            else if (string.IsNullOrWhiteSpace(keyword))
-            {
-                throw new InvalidOperationException("無法從照片辨識植物，請改輸入名稱或上傳更清晰的照片。");
-            }
-        }
-
-        if (string.IsNullOrWhiteSpace(keyword))
-        {
-            throw new InvalidOperationException("請提供植物名稱或上傳照片。");
-        }
-
-        return await RefreshFromExternalCoreAsync(speciesId, keyword, speciesKeyword?.Trim(), cancellationToken);
-    }
-
-    private async Task<KnowledgeRefreshResult> RefreshFromExternalCoreAsync(
-        Guid speciesId,
-        string searchKeyword,
-        string? displayKeyword,
+        string speciesKeyword,
         CancellationToken cancellationToken)
     {
+        var keyword = speciesKeyword?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            throw new InvalidOperationException("請提供植物名稱。");
+        }
+
         var species = await _speciesRepository.GetByIdAsync(speciesId, cancellationToken)
             ?? throw new InvalidOperationException("找不到植物物種。");
 
@@ -195,24 +155,16 @@ public class PlantKnowledgeService
             && !string.Equals(species.ScientificName, "Pending", StringComparison.OrdinalIgnoreCase)
             && !species.ScientificName.StartsWith("Pending-", StringComparison.OrdinalIgnoreCase)
             ? species.ScientificName.Trim()
-            : searchKeyword.Trim();
+            : keyword;
 
         var trustedChinese = CareGuideJson.TrustedChineseName(
-            displayKeyword,
+            keyword,
             species.ChineseName);
 
-        // 產品主路徑：不再打外部植物 API，直接以 OpenAI 強制重寫照護知識
-        var seedKnowledge = new ExternalKnowledgeResult
-        {
-            Provider = "none"
-        };
-
         var synthesis = await _careSynthesisService.SynthesizeAsync(
-            trustedChinese ?? displayKeyword ?? searchKeyword,
+            trustedChinese ?? keyword,
             scientificName,
-            seedKnowledge,
-            cancellationToken,
-            forceRefreshGuide: true);
+            cancellationToken);
 
         if (synthesis.Status == CareSynthesisAttemptStatus.ServiceFailed || synthesis.Partial == null)
         {
@@ -222,8 +174,8 @@ public class PlantKnowledgeService
                     : synthesis.FailureReason);
         }
 
-        var externalKnowledge = MergeExternalWithPartial(seedKnowledge, synthesis.Partial);
-        var aiCareGuide = synthesis.Partial.ExternalCareGuide ?? externalKnowledge.ExternalCareGuide;
+        var externalKnowledge = new ExternalKnowledgeResult { Provider = "none" };
+        var aiCareGuide = synthesis.Partial.ExternalCareGuide;
 
         if (!string.IsNullOrWhiteSpace(trustedChinese))
         {
@@ -239,7 +191,7 @@ public class PlantKnowledgeService
         var displayName = trustedChinese
             ?? species.ChineseName
             ?? species.CommonName
-            ?? searchKeyword;
+            ?? keyword;
 
         var existing = await _knowledgeRepository.GetBySpeciesIdAsync(speciesId, cancellationToken);
         var now = DateTime.UtcNow;
@@ -356,6 +308,7 @@ public class PlantKnowledgeService
                 var stored = CareGuideJson.ForStorage(guide);
                 knowledge.ExternalCareGuide = CareGuideJson.Serialize(stored);
                 CareGuideJson.ProjectQuickFactsToKnowledge(stored.QuickFacts, knowledge);
+                CareGuideJson.ProjectSoilModuleToKnowledge(stored, knowledge);
 
                 var fertText = CareGuideJson.FormatFertilizerRequirement(stored.FertilizerRecipe);
                 if (!string.IsNullOrWhiteSpace(fertText))
@@ -389,6 +342,7 @@ public class PlantKnowledgeService
                 var stored = CareGuideJson.ForStorage(existingGuide);
                 knowledge.ExternalCareGuide = CareGuideJson.Serialize(stored);
                 CareGuideJson.ProjectQuickFactsToKnowledge(stored.QuickFacts, knowledge);
+                CareGuideJson.ProjectSoilModuleToKnowledge(stored, knowledge);
                 return;
             }
 
@@ -558,40 +512,6 @@ public class PlantKnowledgeService
         {
             target.ExternalCareGuide = external.ExternalCareGuide;
         }
-    }
-
-    private static ExternalKnowledgeResult MergeExternalWithPartial(ExternalKnowledgeResult target, ExternalKnowledgePartial partial)
-    {
-        target.LightRequirement = Coalesce(target.LightRequirement, partial.LightRequirement);
-        target.WaterRequirement = Coalesce(target.WaterRequirement, partial.WaterRequirement);
-        target.HumidityRequirement = Coalesce(target.HumidityRequirement, partial.HumidityRequirement);
-        target.SoilRequirement = Coalesce(target.SoilRequirement, partial.SoilRequirement);
-        target.FertilizerRequirement = Coalesce(target.FertilizerRequirement, partial.FertilizerRequirement);
-        target.GrowthSeason = Coalesce(target.GrowthSeason, partial.GrowthSeason);
-        target.TemperatureMin ??= partial.TemperatureMin;
-        target.TemperatureMax ??= partial.TemperatureMax;
-        target.SuggestedLight ??= partial.SuggestedLight;
-        if (!string.IsNullOrWhiteSpace(partial.CareSummary))
-        {
-            target.CareSummary = string.IsNullOrWhiteSpace(target.CareSummary)
-                ? partial.CareSummary
-                : $"{target.CareSummary} {partial.CareSummary}";
-        }
-
-        if (!string.IsNullOrWhiteSpace(partial.ExternalCareGuide))
-        {
-            // 同步重產：允許 AI 結構化說明覆蓋舊長文
-            target.ExternalCareGuide = partial.ExternalCareGuide;
-        }
-
-        if (!string.IsNullOrWhiteSpace(partial.Provider))
-        {
-            target.Provider = string.IsNullOrWhiteSpace(target.Provider)
-                ? partial.Provider
-                : $"{target.Provider}+{partial.Provider}";
-        }
-
-        return target;
     }
 
     private static string? BuildExternalCareGuide(string displayName, Midnight.EC.Plant.WEB.Models.Models.PlantKnowledgeModel knowledge) =>

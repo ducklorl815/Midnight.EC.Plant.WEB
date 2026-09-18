@@ -239,9 +239,52 @@ public class PlantDetailViewModel
     /// <summary>記一筆（日期可今天或過去）</summary>
     public TodayLogViewModel LogEntry { get; set; } = new();
     public PlantProfileViewModel Profile { get; set; } = new();
+    public List<PlantFertilizerProductViewModel> FertilizerProducts { get; set; } = [];
+    public PlantFertilizerProductEditViewModel NewFertilizer { get; set; } = new();
     public PlantCareSuggestionsViewModel CareSuggestions { get; set; } = new();
     public SyncKnowledgeViewModel SyncKnowledge { get; set; } = new();
     public List<PlantReminderItemViewModel> Reminders { get; set; } = [];
+}
+
+public class PlantListPageViewModel
+{
+    public List<PlantListRowViewModel> Items { get; set; } = [];
+}
+
+public class PlantListRowViewModel
+{
+    public Guid PlantId { get; set; }
+    public string DisplayName { get; set; } = string.Empty;
+    public string? CoverImagePath { get; set; }
+    public int? LatestHealthScore { get; set; }
+    public int? WaterDaysRemaining { get; set; }
+    public List<PlantListFertilizerRowViewModel> Fertilizers { get; set; } = [];
+}
+
+public class PlantListFertilizerRowViewModel
+{
+    public Guid? FertilizerProductId { get; set; }
+    public string Name { get; set; } = "施肥";
+    public int? DaysRemaining { get; set; }
+}
+
+public class PlantFertilizerProductViewModel
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int IntervalDays { get; set; }
+}
+
+public class PlantFertilizerProductEditViewModel
+{
+    [Display(Name = "肥料名稱")]
+    [Required(ErrorMessage = "請輸入肥料名稱")]
+    [StringLength(64)]
+    public string Name { get; set; } = string.Empty;
+
+    [Display(Name = "間隔天數")]
+    [Range(1, 365)]
+    public int IntervalDays { get; set; } = 30;
 }
 
 public class PlantPhotoItemViewModel
@@ -252,6 +295,8 @@ public class PlantPhotoItemViewModel
     public bool IsCover { get; set; }
     public DateTime CreatedAt { get; set; }
     public PlantAnalysisItemViewModel? LatestAnalysis { get; set; }
+    public Guid? LatestEffectImageId { get; set; }
+    public string? LatestEffectImageUrl { get; set; }
 }
 
 public class CreatePhotoViewModel

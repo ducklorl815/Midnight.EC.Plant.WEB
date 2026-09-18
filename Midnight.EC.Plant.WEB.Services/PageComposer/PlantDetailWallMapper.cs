@@ -61,11 +61,9 @@ public static class PlantDetailWallMapper
         PlantModel plant,
         PlantProfileModel? profile,
         string? coverImagePath,
-        double zoom = 1,
-        double focusX = 50,
-        double focusY = 50)
+        Guid? coverImageId = null)
     {
-        _ = profile; // framing / env icons no longer used on the wall copy
+        _ = profile;
 
         return new PlantDetailWallSlideDto
         {
@@ -75,10 +73,9 @@ public static class PlantDetailWallMapper
                 ? null
                 : plant.Species!.ScientificName.Trim(),
             Intro = ResolveIntro(plant),
+            CoverImageId = coverImageId,
             CoverImagePath = coverImagePath,
-            Zoom = zoom <= 0 ? 1 : zoom,
-            FocusX = Math.Clamp(focusX, 0, 100),
-            FocusY = Math.Clamp(focusY, 0, 100),
+            LeftImagePath = coverImagePath,
             CareFacts = BuildCareFacts(plant.Species?.Knowledge)
         };
     }

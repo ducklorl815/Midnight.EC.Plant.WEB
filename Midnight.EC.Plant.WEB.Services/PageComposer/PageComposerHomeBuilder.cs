@@ -4,6 +4,7 @@ using Midnight.EC.Plant.WEB.Models.Enums;
 using Midnight.EC.Plant.WEB.Models.Respository;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Services.Plant;
+using Midnight.EC.Plant.WEB.Services.PlantEffect;
 using Midnight.EC.Plant.WEB.Services.PlantReminder;
 
 namespace Midnight.EC.Plant.WEB.Services.PageComposer;
@@ -157,7 +158,7 @@ public class PageComposerHomeBuilder
         PageComposerLayoutDto layout,
         CancellationToken cancellationToken = default)
     {
-        var result = new Dictionary<string, List<PlantDetailWallSlideDto>>(StringComparer.Ordinal);
+        var result = new Dictionary<string, List<PlantDetailWallSlideDto>>(StringComparer.OrdinalIgnoreCase);
         var carouselModules = layout.Modules
             .Where(m => m.Type == PageModuleType.PlantDetailWallCarousel)
             .ToList();
@@ -195,34 +196,42 @@ public class PageComposerHomeBuilder
 
         return baseSlides.Select(s =>
         {
-            var zoom = 1d;
-            var fx = 50d;
-            var fy = 50d;
+            var cardX = s.CardX;
+            var cardY = s.CardY;
+            string? swapped = null;
+            Guid? effectId = null;
             if (frames.TryGetValue(s.PlantId, out var frame))
             {
-                zoom = frame.Zoom <= 0 ? 1 : frame.Zoom;
-                fx = frame.FocusX;
-                fy = frame.FocusY;
+                cardX = double.IsNaN(frame.CardX) ? 6 : Math.Clamp(frame.CardX, 0, 72);
+                cardY = double.IsNaN(frame.CardY) ? 22 : Math.Clamp(frame.CardY, 0, 78);
+                swapped = frame.EffectImageUrl;
+                effectId = frame.EffectImageId;
             }
 
-            return CloneWithFrame(s, zoom, fx, fy);
+            var clone = CloneWithFrame(s, cardX, cardY);
+            clone.LatestEffectImageId = effectId;
+            clone.LatestEffectImageUrl = string.IsNullOrWhiteSpace(swapped) ? null : swapped.Trim();
+            clone.LeftImagePath = PlantEffectImageService.ResolveLeftImage(s.CoverImagePath, swapped);
+            return clone;
         }).ToList();
     }
 
     private static PlantDetailWallSlideDto CloneWithFrame(
         PlantDetailWallSlideDto source,
-        double zoom,
-        double focusX,
-        double focusY) => new()
+        double cardX,
+        double cardY) => new()
     {
         PlantId = source.PlantId,
         DisplayName = source.DisplayName,
         ScientificName = source.ScientificName,
         Intro = source.Intro,
+        CoverImageId = source.CoverImageId,
         CoverImagePath = source.CoverImagePath,
-        Zoom = zoom <= 0 ? 1 : Math.Clamp(zoom, 0.05, 8),
-        FocusX = Math.Clamp(focusX, 0, 100),
-        FocusY = Math.Clamp(focusY, 0, 100),
+        LatestEffectImageId = source.LatestEffectImageId,
+        LatestEffectImageUrl = source.LatestEffectImageUrl,
+        LeftImagePath = source.LeftImagePath,
+        CardX = double.IsNaN(cardX) ? 6 : Math.Clamp(cardX, 0, 72),
+        CardY = double.IsNaN(cardY) ? 22 : Math.Clamp(cardY, 0, 78),
         CareFacts = source.CareFacts?.Select(f => new PlantDetailWallCareFactDto
         {
             Label = f.Label,
@@ -258,7 +267,9 @@ public class PageComposerHomeBuilder
                 continue;
             covers.TryGetValue(plant.ID, out var cover);
             var path = cover == null ? null : _imageStorage.GetPublicPath(cover.StoragePath);
-            slides.Add(PlantDetailWallMapper.ToSlide(plant, null, path));
+            var slide = PlantDetailWallMapper.ToSlide(plant, null, path, cover?.ID);
+            slide.LeftImagePath = PlantEffectImageService.ResolveLeftImage(path, null);
+            slides.Add(slide);
         }
 
         return slides;

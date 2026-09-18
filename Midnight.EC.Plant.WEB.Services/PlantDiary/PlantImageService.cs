@@ -95,6 +95,47 @@ public class LocalImageStorageService : IImageStorageService
 
     public string GetPublicPath(string storagePath) => $"/{storagePath.Replace('\\', '/')}";
 
+    public string GetAbsolutePath(string storagePath) =>
+        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", storagePath.Replace('/', Path.DirectorySeparatorChar));
+
+    public async Task<StoredImageResult> SaveEffectAsync(
+        Stream stream,
+        string fileName,
+        string contentType,
+        Guid plantId,
+        CancellationToken cancellationToken = default)
+    {
+        var extension = Path.GetExtension(fileName);
+        if (string.IsNullOrWhiteSpace(extension))
+            extension = contentType?.ToLowerInvariant() switch
+            {
+                "image/png" => ".png",
+                "image/webp" => ".webp",
+                _ => ".png"
+            };
+
+        var storedName = $"{Guid.NewGuid():N}{extension}";
+        var relativeFolder = Path.Combine(_options.RootPath, plantId.ToString(), "effects");
+        var absoluteFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", relativeFolder);
+        Directory.CreateDirectory(absoluteFolder);
+
+        var absolutePath = Path.Combine(absoluteFolder, storedName);
+        await using (var fileStream = File.Create(absolutePath))
+        {
+            await stream.CopyToAsync(fileStream, cancellationToken);
+        }
+
+        var relativePath = Path.Combine(relativeFolder, storedName).Replace('\\', '/');
+        return new StoredImageResult
+        {
+            FileName = storedName,
+            StoragePath = relativePath,
+            ThumbnailPath = relativePath,
+            FileSize = new FileInfo(absolutePath).Length,
+            Sha256 = null
+        };
+    }
+
     private static async Task<string> ComputeSha256Async(string absolutePath, CancellationToken cancellationToken)
     {
         await using var stream = File.OpenRead(absolutePath);

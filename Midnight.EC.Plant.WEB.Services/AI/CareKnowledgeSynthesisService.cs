@@ -1,64 +1,39 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Midnight.EC.Plant.WEB.Models.External;
-using Midnight.EC.Plant.WEB.Services.Configuration;
-using Midnight.EC.Plant.WEB.Services.Interfaces;
 
 namespace Midnight.EC.Plant.WEB.Services.AI;
 
-public class CareKnowledgeSynthesisService : ICareKnowledgeSynthesisService
+public class CareKnowledgeSynthesisService
 {
     public const string PromptVersion = "care-synthesis-v7";
 
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly AiOptions _options;
+    private readonly IChatCompletionEnvelope _chat;
     private readonly ILogger<CareKnowledgeSynthesisService> _logger;
 
     public CareKnowledgeSynthesisService(
-        IHttpClientFactory httpClientFactory,
-        IOptions<AiOptions> options,
+        IChatCompletionEnvelope chat,
         ILogger<CareKnowledgeSynthesisService> logger)
     {
-        _httpClientFactory = httpClientFactory;
-        _options = options.Value;
+        _chat = chat;
         _logger = logger;
     }
 
     public async Task<CareSynthesisResult> SynthesizeAsync(
         string speciesKeyword,
         string? scientificName,
-        ExternalKnowledgeResult mergedKnowledge,
-        CancellationToken cancellationToken = default,
-        bool forceRefreshGuide = false)
+        CancellationToken cancellationToken = default)
     {
-        if (!forceRefreshGuide && !CareKnowledgeCompleteness.HasGaps(mergedKnowledge))
-        {
-            return CareSynthesisResult.Skipped();
-        }
-
-        if (string.IsNullOrWhiteSpace(_options.OpenAI.ApiKey))
-        {
-            _logger.LogWarning("OpenAI key not configured; AI 補足 skipped.");
-            return CareSynthesisResult.Failed("尚未設定 AI:OpenAI:ApiKey（請確認 Development 設定或 User Secrets）。");
-        }
-
         try
         {
-            var client = _httpClientFactory.CreateClient("OpenAI");
-            var userPrompt = BuildPrompt(speciesKeyword, scientificName, mergedKnowledge);
-            var payload = new
-            {
-                model = _options.OpenAI.Model,
-                response_format = new { type = "json_object" },
-                messages = new object[]
-                {
-                    new
+            var userPrompt = BuildPrompt(speciesKeyword, scientificName);
+            var content = await _chat.CompleteAsync(
+                [
+                    new ChatCompletionMessage
                     {
-                        role = "system",
-                        content = """
+                        Role = "system",
+                        Text = """
                             你是台灣居家植栽顧問。輸出物種照護知識 JSON（species-care-v3）。
                             欄位名英文；給使用者讀的字串用繁體中文（台灣用字），禁止簡體。
 
@@ -97,42 +72,9 @@ public class CareKnowledgeSynthesisService : ICareKnowledgeSynthesisService
                             chineseName 只能填使用者輸入的中文名；別名放 basics.alsoKnownAs。
                             """
                     },
-                    new { role = "user", content = userPrompt }
-                }
-            };
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.OpenAI.ApiKey.Trim());
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(payload),
-                Encoding.UTF8,
-                "application/json");
-
-            using var response = await client.SendAsync(request, cancellationToken);
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                var detail = Truncate(ExtractOpenAiError(responseBody) ?? responseBody, 240);
-                _logger.LogWarning(
-                    "Care synthesis OpenAI failed: {Status} {Detail}",
-                    (int)response.StatusCode,
-                    detail);
-                return CareSynthesisResult.Failed($"OpenAI HTTP {(int)response.StatusCode}：{detail}");
-            }
-
-            using var document = JsonDocument.Parse(responseBody);
-            var content = document.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
-
-            content = StripMarkdownFence(content);
-            if (string.IsNullOrWhiteSpace(content))
-            {
-                return CareSynthesisResult.Failed("OpenAI 回傳內容為空。");
-            }
+                    new ChatCompletionMessage { Role = "user", Text = userPrompt }
+                ],
+                cancellationToken: cancellationToken);
 
             ExternalKnowledgePartial partial;
             try
@@ -568,163 +510,6 @@ public class CareKnowledgeSynthesisService : ICareKnowledgeSynthesisService
         return recipe;
     }
 
-    public async Task<EnvironmentFitResult> SynthesizeEnvironmentFitAsync(
-        string plantDisplayName,
-        string? scientificName,
-        ExternalKnowledgeResult knowledge,
-        PlantEnvironmentContext environment,
-        CancellationToken cancellationToken = default)
-    {
-        var hasEnv = !string.IsNullOrWhiteSpace(environment.PlacementLabel)
-            || !string.IsNullOrWhiteSpace(environment.LightLabel)
-            || environment.RainCoverLabel != null
-            || !string.IsNullOrWhiteSpace(environment.SubstrateType)
-            || !string.IsNullOrWhiteSpace(environment.SaucerLabel);
-
-        if (!hasEnv)
-        {
-            return EnvironmentFitResult.Skipped();
-        }
-
-        if (string.IsNullOrWhiteSpace(_options.OpenAI.ApiKey))
-        {
-            return EnvironmentFitResult.Failed("尚未設定 AI:OpenAI:ApiKey。");
-        }
-
-        try
-        {
-            var client = _httpClientFactory.CreateClient("OpenAI");
-            var userPrompt = BuildEnvironmentFitPrompt(plantDisplayName, scientificName, knowledge, environment);
-            var payload = new
-            {
-                model = _options.OpenAI.Model,
-                response_format = new { type = "json_object" },
-                messages = new object[]
-                {
-                    new
-                    {
-                        role = "system",
-                        content = """
-                            你是台灣居家植栽顧問。必須依「使用者實際環境」對照「物種照護需求」做適配分析。
-                            【語言】全文繁體中文（台灣用字），禁止簡體。JSON 鍵名用英文。
-                            【禁止】重抄物種光照／澆水／介質百科；只寫「物種需求 vs 你的環境」的差異、風險與調整。
-                            若提供水盤狀態，必須在 adjustments 或 problems 中明確建議：拿掉水盤、可留盤但勿積水、或適合淺盤保濕。
-                            輸出 JSON：
-                            {
-                              "fitSummary": "1～2 句契合／落差",
-                              "problems": [ { "text": "問題與原因", "hint": "可選附註" } ],
-                              "adjustments": [ "可執行調整1" ],
-                              "fertilizerAdjustment": "一句話環境下施肥調整；不要重複完整配方教學"
-                            }
-                            problems 列 2～4 項。
-                            """
-                    },
-                    new { role = "user", content = userPrompt }
-                }
-            };
-
-            using var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.OpenAI.ApiKey.Trim());
-            request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
-            using var response = await client.SendAsync(request, cancellationToken);
-            var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                var detail = Truncate(ExtractOpenAiError(responseBody) ?? responseBody, 240);
-                return EnvironmentFitResult.Failed($"OpenAI HTTP {(int)response.StatusCode}：{detail}");
-            }
-
-            using var document = JsonDocument.Parse(responseBody);
-            var content = document.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
-            content = StripMarkdownFence(content);
-            if (string.IsNullOrWhiteSpace(content))
-            {
-                return EnvironmentFitResult.Failed("OpenAI 回傳內容為空。");
-            }
-
-            using var adviceDoc = JsonDocument.Parse(content);
-            var root = adviceDoc.RootElement;
-
-            // 新結構
-            if (TryGetPropertyIgnoreCase(root, "fitSummary", out _)
-                || TryGetPropertyIgnoreCase(root, "problems", out _)
-                || TryGetPropertyIgnoreCase(root, "adjustments", out _))
-            {
-                var dto = new EnvironmentAdviceDto
-                {
-                    FitSummary = NullIfEmpty(GetString(root, "fitSummary")),
-                    FertilizerAdjustment = NullIfEmpty(GetString(root, "fertilizerAdjustment")),
-                    Problems = ParseProblems(root),
-                    Adjustments = ParseStringArray(root, "adjustments")
-                };
-                return EnvironmentFitResult.Ok(CareGuideJson.Serialize(dto));
-            }
-
-            // 舊版相容：advice 字串
-            var advice = GetString(root, "advice");
-            if (string.IsNullOrWhiteSpace(advice))
-            {
-                advice = content.Trim();
-            }
-
-            return EnvironmentFitResult.Ok(CareGuideJson.Serialize(new EnvironmentAdviceDto
-            {
-                FitSummary = advice.Trim()
-            }));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Environment fit synthesis failed for {Plant}", plantDisplayName);
-            return EnvironmentFitResult.Failed($"呼叫 OpenAI 例外：{ex.GetType().Name} — {Truncate(ex.Message, 180)}");
-        }
-    }
-
-    private static List<EnvironmentProblemDto> ParseProblems(JsonElement root)
-    {
-        if (!TryGetPropertyIgnoreCase(root, "problems", out var el) || el.ValueKind != JsonValueKind.Array)
-        {
-            return [];
-        }
-
-        var list = new List<EnvironmentProblemDto>();
-        foreach (var item in el.EnumerateArray())
-        {
-            if (item.ValueKind == JsonValueKind.String)
-            {
-                var text = item.GetString();
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    list.Add(new EnvironmentProblemDto { Text = text.Trim() });
-                }
-                continue;
-            }
-
-            if (item.ValueKind != JsonValueKind.Object)
-            {
-                continue;
-            }
-
-            var textVal = NullIfEmpty(GetString(item, "text")) ?? NullIfEmpty(GetString(item, "problem"));
-            if (string.IsNullOrWhiteSpace(textVal))
-            {
-                continue;
-            }
-
-            list.Add(new EnvironmentProblemDto
-            {
-                Text = textVal,
-                Hint = NullIfEmpty(GetString(item, "hint"))
-            });
-        }
-
-        return list;
-    }
-
     private static List<string> ParseStringArray(JsonElement root, string name)
     {
         if (!TryGetPropertyIgnoreCase(root, name, out var el) || el.ValueKind != JsonValueKind.Array)
@@ -737,63 +522,6 @@ public class CareKnowledgeSynthesisService : ICareKnowledgeSynthesisService
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .Select(s => s!.Trim())
             .ToList();
-    }
-
-    private static string BuildEnvironmentFitPrompt(
-        string plantDisplayName,
-        string? scientificName,
-        ExternalKnowledgeResult knowledge,
-        PlantEnvironmentContext environment)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"植栽：{plantDisplayName}");
-        sb.AppendLine($"學名：{scientificName ?? "未知"}");
-        sb.AppendLine("【使用者實際環境】（必須以此為分析主軸）");
-        sb.AppendLine($"- 實際位置類型：{environment.PlacementLabel ?? "未設定"}");
-        sb.AppendLine($"- 實際日照：{environment.LightLabel ?? "未設定"}");
-        sb.AppendLine($"- 遮雨：{environment.RainCoverLabel ?? "未設定"}");
-        sb.AppendLine($"- 介質：{environment.SubstrateType ?? "未設定"}");
-        sb.AppendLine($"- 水盤狀態：{environment.SaucerLabel ?? "未設定"}");
-        sb.AppendLine($"- 縣市：{environment.City ?? "未設定"}");
-        if (environment.MismatchWarnings.Count > 0)
-        {
-            sb.AppendLine("系統已偵測到的落差警告：");
-            foreach (var w in environment.MismatchWarnings)
-            {
-                sb.AppendLine($"- {w}");
-            }
-        }
-
-        sb.AppendLine("【物種照護需求（外部知識）】");
-        sb.AppendLine($"- 光照：{knowledge.LightRequirement}");
-        sb.AppendLine($"- 澆水：{knowledge.WaterRequirement}");
-        sb.AppendLine($"- 濕度：{knowledge.HumidityRequirement}");
-        sb.AppendLine($"- 溫度：{knowledge.TemperatureMin}~{knowledge.TemperatureMax}°C");
-        sb.AppendLine($"- 土壤：{knowledge.SoilRequirement}");
-        sb.AppendLine($"- 施肥：{knowledge.FertilizerRequirement}");
-        sb.AppendLine($"- 生長季：{knowledge.GrowthSeason}");
-        if (!string.IsNullOrWhiteSpace(knowledge.ExternalCareGuide))
-        {
-            var parsed = CareGuideJson.TryParseSpeciesGuide(knowledge.ExternalCareGuide);
-            if (parsed != null)
-            {
-                sb.AppendLine($"- 物種說明：{parsed.Summary}");
-                if (parsed.Fertilizer != null)
-                {
-                    sb.AppendLine($"- 物種施肥配方：{CareGuideJson.FormatFertilizerRequirement(parsed.Fertilizer)}");
-                }
-            }
-            else
-            {
-                var guide = knowledge.ExternalCareGuide.Length > 600
-                    ? knowledge.ExternalCareGuide[..600] + "…"
-                    : knowledge.ExternalCareGuide;
-                sb.AppendLine($"- 物種說明摘要：{guide}");
-            }
-        }
-
-        sb.AppendLine("請產出結構化適配分析（fitSummary／problems／adjustments／fertilizerAdjustment），繁體中文。");
-        return sb.ToString();
     }
 
     private static string? GetString(JsonElement root, string name)
@@ -898,70 +626,18 @@ public class CareKnowledgeSynthesisService : ICareKnowledgeSynthesisService
         && string.IsNullOrWhiteSpace(p.GrowthSeason)
         && string.IsNullOrWhiteSpace(p.ExternalCareGuide);
 
-    private static string BuildPrompt(string keyword, string? scientificName, ExternalKnowledgeResult merged)
+    private static string BuildPrompt(string keyword, string? scientificName)
     {
         var sb = new StringBuilder();
         sb.AppendLine("請以繁體中文（台灣用字）產出 species-care-v3；不要使用簡體中文。");
         sb.AppendLine($"使用者輸入（中文名以此為準，禁止改成其他俗名）：{keyword}");
         sb.AppendLine($"學名：{scientificName ?? "未知"}");
-        sb.AppendLine("參考資料（可忽略過時內容，請強制重寫為模組化結果）：");
-        sb.AppendLine($"- 光照：{merged.LightRequirement}");
-        sb.AppendLine($"- 澆水：{merged.WaterRequirement}");
-        sb.AppendLine($"- 濕度：{merged.HumidityRequirement}");
-        sb.AppendLine($"- 溫度：{merged.TemperatureMin}~{merged.TemperatureMax}°C");
-        sb.AppendLine($"- 介質：{merged.SoilRequirement}");
-        sb.AppendLine($"- 施肥：{merged.FertilizerRequirement}");
-        sb.AppendLine($"- 生長季：{merged.GrowthSeason}");
+        sb.AppendLine("請強制重寫為模組化結果，不要依賴外部資料庫摘要。");
         sb.AppendLine("規則：一事實一模組；不要寫養護重點總覽；不要產出 environment-analysis。");
         sb.AppendLine("quickFacts.light 必填：None / Diffuse / HalfDay / FullSun。");
         sb.AppendLine("temperatureMin / temperatureMax 必須是純數字。");
         sb.AppendLine("wateringStrategy 優先 dry_then_soak；wateringIntervalHint 僅參考。");
         return sb.ToString();
-    }
-
-    private static string? StripMarkdownFence(string? content)
-    {
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            return content;
-        }
-
-        var trimmed = content.Trim();
-        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
-        {
-            return trimmed;
-        }
-
-        var lines = trimmed.Split('\n');
-        if (lines.Length < 3)
-        {
-            return trimmed;
-        }
-
-        return string.Join('\n', lines.Skip(1).TakeWhile(l => !l.TrimStart().StartsWith("```", StringComparison.Ordinal))).Trim();
-    }
-
-    private static string? ExtractOpenAiError(string body)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(body);
-            if (doc.RootElement.TryGetProperty("error", out var error))
-            {
-                if (error.TryGetProperty("message", out var message))
-                {
-                    return message.GetString();
-                }
-
-                return error.ToString();
-            }
-        }
-        catch
-        {
-            // ignore parse errors
-        }
-
-        return null;
     }
 
     private static string Truncate(string value, int max) =>

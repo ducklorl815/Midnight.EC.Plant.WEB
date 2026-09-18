@@ -1,43 +1,23 @@
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Midnight.EC.Plant.WEB.Models.External;
-using Midnight.EC.Plant.WEB.Services.Configuration;
-using Midnight.EC.Plant.WEB.Services.Interfaces;
 
 namespace Midnight.EC.Plant.WEB.Services.AI;
 
-public interface IOpenAISpeciesFinderService
-{
-    Task<IReadOnlyList<ExternalSpeciesResult>> FindByTextAsync(
-        string query,
-        CancellationToken cancellationToken = default);
-
-    Task<IReadOnlyList<ExternalSpeciesResult>> FindByImageAsync(
-        Stream imageStream,
-        string fileName,
-        string? chineseHint,
-        CancellationToken cancellationToken = default);
-}
-
 /// <summary>兩段式找種的第一段：只解析 1～3 候選，不寫滿照護知識。</summary>
-public class OpenAISpeciesFinderService : IOpenAISpeciesFinderService
+public class OpenAISpeciesFinderService
 {
     public const string PromptVersion = "species-find-v1";
 
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly AiOptions _options;
+    private readonly IChatCompletionEnvelope _chat;
     private readonly ILogger<OpenAISpeciesFinderService> _logger;
 
     public OpenAISpeciesFinderService(
-        IHttpClientFactory httpClientFactory,
-        IOptions<AiOptions> options,
+        IChatCompletionEnvelope chat,
         ILogger<OpenAISpeciesFinderService> logger)
     {
-        _httpClientFactory = httpClientFactory;
-        _options = options.Value;
+        _chat = chat;
         _logger = logger;
     }
 
@@ -75,11 +55,6 @@ public class OpenAISpeciesFinderService : IOpenAISpeciesFinderService
             throw new InvalidOperationException("請輸入中文名／學名，或上傳照片。");
         }
 
-        if (string.IsNullOrWhiteSpace(_options.OpenAI.ApiKey))
-        {
-            throw new InvalidOperationException("尚未設定 AI:OpenAI:ApiKey。");
-        }
-
         var isChinese = CareGuideJson.HasCjk(query);
         var userText = new StringBuilder();
         if (imageBytes != null)
@@ -105,63 +80,42 @@ public class OpenAISpeciesFinderService : IOpenAISpeciesFinderService
         userText.AppendLine("最多 3 筆；identificationHint 用一句繁中說明辨識重點或易混種差異。");
         userText.AppendLine("若無法辨識，candidates 給空陣列。");
 
-        object userContent;
+        ChatCompletionMessage userMessage;
         if (imageBytes != null)
         {
             var b64 = Convert.ToBase64String(imageBytes);
-            userContent = new object[]
+            userMessage = new ChatCompletionMessage
             {
-                new { type = "text", text = userText.ToString() },
-                new { type = "image_url", image_url = new { url = $"data:{mime};base64,{b64}" } }
+                Role = "user",
+                Parts =
+                [
+                    ChatContentPart.FromText(userText.ToString()),
+                    ChatContentPart.FromImageDataUrl($"data:{mime};base64,{b64}")
+                ]
             };
         }
         else
         {
-            userContent = userText.ToString();
+            userMessage = new ChatCompletionMessage { Role = "user", Text = userText.ToString() };
         }
-
-        var payload = new
-        {
-            model = _options.OpenAI.Model,
-            response_format = new { type = "json_object" },
-            messages = new object[]
-            {
-                new
-                {
-                    role = "system",
-                    content = """
-                        你是植物分類助理，服務台灣繁體中文使用者。
-                        只做物種候選解析，不要寫栽培長文。
-                        欄位名英文；identificationHint、alsoKnownAs 用繁體中文。
-                        scientificName 必須是拉丁學名。不要捏造不存在的學名。
-                        """
-                },
-                new { role = "user", content = userContent }
-            }
-        };
 
         try
         {
-            var client = _httpClientFactory.CreateClient("OpenAI");
-            using var request = new HttpRequestMessage(HttpMethod.Post, "chat/completions");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.OpenAI.ApiKey.Trim());
-            request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
-            using var response = await client.SendAsync(request, cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Species find OpenAI failed: {Status} {Body}", (int)response.StatusCode, Truncate(body, 240));
-                throw new InvalidOperationException($"OpenAI 找種失敗（HTTP {(int)response.StatusCode}）。");
-            }
-
-            using var doc = JsonDocument.Parse(body);
-            var content = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
-            content = StripFence(content);
-            if (string.IsNullOrWhiteSpace(content))
-            {
-                return [];
-            }
+            var content = await _chat.CompleteAsync(
+                [
+                    new ChatCompletionMessage
+                    {
+                        Role = "system",
+                        Text = """
+                            你是植物分類助理，服務台灣繁體中文使用者。
+                            只做物種候選解析，不要寫栽培長文。
+                            欄位名英文；identificationHint、alsoKnownAs 用繁體中文。
+                            scientificName 必須是拉丁學名。不要捏造不存在的學名。
+                            """
+                    },
+                    userMessage
+                ],
+                cancellationToken: cancellationToken);
 
             return ParseCandidates(content, isChinese ? query : null);
         }
@@ -260,16 +214,6 @@ public class OpenAISpeciesFinderService : IOpenAISpeciesFinderService
 
         value = default;
         return false;
-    }
-
-    private static string? StripFence(string? content)
-    {
-        if (string.IsNullOrWhiteSpace(content)) return content;
-        var trimmed = content.Trim();
-        if (!trimmed.StartsWith("```", StringComparison.Ordinal)) return trimmed;
-        var lines = trimmed.Split('\n');
-        if (lines.Length < 3) return trimmed;
-        return string.Join('\n', lines.Skip(1).TakeWhile(l => !l.TrimStart().StartsWith("```", StringComparison.Ordinal))).Trim();
     }
 
     private static string Truncate(string? s, int max) =>

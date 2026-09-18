@@ -49,6 +49,7 @@ public class SpeciesCareGuideDto
         || !string.IsNullOrWhiteSpace(Identification)
         || !string.IsNullOrWhiteSpace(Light)
         || !string.IsNullOrWhiteSpace(Watering)
+        || !string.IsNullOrWhiteSpace(Substrate)
         || !string.IsNullOrWhiteSpace(Summary);
 
     public string? GetWallIntro()
@@ -234,11 +235,26 @@ public static class CareGuideJson
         }
         else
         {
+            foreach (var mod in dto.Modules)
+            {
+                var mapped = CareGuideSectionOrderDto.MapLegacySectionKey(mod.Id);
+                if (!string.IsNullOrWhiteSpace(mapped))
+                {
+                    mod.Id = mapped;
+                }
+            }
+
             // 確保 basic-info 可帶 basics
             var basic = dto.FindModule(CareGuideModuleIds.BasicInfo);
             if (basic != null && basic.Basics == null && dto.Basics != null)
             {
                 basic.Basics = dto.Basics;
+            }
+
+            // 舊扁平 substrate 尚未升模組時補上
+            if (dto.FindModule(CareGuideModuleIds.Soil) == null)
+            {
+                AddModule(dto, CareGuideModuleIds.Soil, dto.Substrate);
             }
         }
 
@@ -313,6 +329,27 @@ public static class CareGuideJson
         {
             knowledge.GrowthSeason = string.Join("、", facts.GrowingSeason.Select(HumanizeSeason));
         }
+    }
+
+    /// <summary>有 soil／substrate 模組內容但短欄空白時，投影到 SoilRequirement。</summary>
+    public static void ProjectSoilModuleToKnowledge(
+        SpeciesCareGuideDto? guide,
+        Midnight.EC.Plant.WEB.Models.Models.PlantKnowledgeModel knowledge)
+    {
+        if (knowledge == null || !string.IsNullOrWhiteSpace(knowledge.SoilRequirement) || guide == null)
+        {
+            return;
+        }
+
+        var soil = guide.FindModule(CareGuideModuleIds.Soil);
+        var text = FirstNonEmpty(soil?.Content, guide.Substrate);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        var trimmed = text.Trim();
+        knowledge.SoilRequirement = trimmed.Length > 400 ? trimmed[..400] + "…" : trimmed;
     }
 
     private static void AddModule(SpeciesCareGuideDto dto, string id, string? content, CareBasicsDto? basics = null)

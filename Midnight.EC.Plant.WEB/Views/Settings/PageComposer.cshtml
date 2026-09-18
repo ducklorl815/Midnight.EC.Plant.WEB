@@ -27,6 +27,7 @@
 }
 
 <link rel="stylesheet" href="~/css/page-composer.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/plant-effect-image.css" asp-append-version="true" />
 
 <script type="application/json" id="pc-layout-seed">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(seedPayload, new System.Text.Json.JsonSerializerOptions { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } }))</script>
 
@@ -34,7 +35,7 @@
     <aside class="pc-editor-side">
         <div>
             <h1>首頁拼圖</h1>
-            <p class="text-muted small mb-0">點選模組編輯細項；⠿ 拖移排序（也可 ↑↓）。Banner 固定頂部且必開。植栽細節牆可滑桿／預覽拖移調取景。</p>
+            <p class="text-muted small mb-0">點選模組編輯細項；⠿ 拖移排序（也可 ↑↓）。Banner 固定頂部且必開。植栽細節牆可生成效果圖並置換左圖。</p>
         </div>
 
         <div>
@@ -48,8 +49,8 @@
             <p class="small text-muted mb-0" id="pc-detail-empty">點選上方模組以編輯細項。</p>
             <div id="pc-detail-banner" class="pc-detail-banner d-none"></div>
             <div id="pc-detail-carousel" class="pc-detail-carousel d-none">
-                <div class="fw-semibold small mb-2">輪播圖取景（此模組專用）</div>
-                <p class="small text-muted">選一張後：滑桿調縮放／左右／上下；預覽左圖直接拖移可改顯示位置。</p>
+                <div class="fw-semibold small mb-2">效果圖設定（此模組專用）</div>
+                <p class="small text-muted">選一張後：確認生成效果圖，再按「置換」。儲存後首頁左圖才會換成效果圖。</p>
                 <div id="pc-frame-list" class="pc-frame-list"></div>
             </div>
         </div>
@@ -85,5 +86,6 @@
 
 @section Scripts {
     <script src="~/js/page-composer-chrome.js" asp-append-version="true"></script>
+    <script src="~/js/plant-effect-image.js" asp-append-version="true"></script>
     <script src="~/js/page-composer-editor.js" asp-append-version="true"></script>
 }

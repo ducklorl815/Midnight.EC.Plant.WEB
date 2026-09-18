@@ -94,17 +94,21 @@ public class PageComposerSlideFrameDto
     [JsonPropertyName("plantId")]
     public Guid PlantId { get; set; }
 
-    /// <summary>Display scale, e.g. 1.257.</summary>
-    [JsonPropertyName("zoom")]
-    public double Zoom { get; set; } = 1;
+    /// <summary>置換後的效果圖（PlantEffectImage.ID）。</summary>
+    [JsonPropertyName("effectImageId")]
+    public Guid? EffectImageId { get; set; }
 
-    /// <summary>Pan X as percent 0..100 (50 = centered).</summary>
-    [JsonPropertyName("focusX")]
-    public double FocusX { get; set; } = 50;
+    /// <summary>效果圖公開路徑（如 /uploads/plants/.../effects/...），供首頁與編輯預覽直接使用。</summary>
+    [JsonPropertyName("effectImageUrl")]
+    public string? EffectImageUrl { get; set; }
 
-    /// <summary>Pan Y as percent 0..100 (50 = centered).</summary>
-    [JsonPropertyName("focusY")]
-    public double FocusY { get; set; } = 50;
+    /// <summary>字卡左上角 X 百分比（以圖片框為基準）。</summary>
+    [JsonPropertyName("cardX")]
+    public double CardX { get; set; } = 6;
+
+    /// <summary>字卡左上角 Y 百分比（以圖片框為基準）。</summary>
+    [JsonPropertyName("cardY")]
+    public double CardY { get; set; } = 22;
 }
 
 public class PageComposerImageDto

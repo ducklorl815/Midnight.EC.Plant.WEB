@@ -11,10 +11,12 @@ using Midnight.EC.Plant.WEB.Services.PageComposer;
 using Midnight.EC.Plant.WEB.Services.Plant;
 using Midnight.EC.Plant.WEB.Services.PlantAnalysis;
 using Midnight.EC.Plant.WEB.Services.PlantCare;
+using Midnight.EC.Plant.WEB.Services.PlantList;
 using Midnight.EC.Plant.WEB.Services.PlantDiary;
 using Midnight.EC.Plant.WEB.Services.PlantKnowledge;
 using Midnight.EC.Plant.WEB.Services.PlantProfile;
 using Midnight.EC.Plant.WEB.Services.PlantReminder;
+using Midnight.EC.Plant.WEB.Services.PlantEffect;
 using Midnight.EC.Plant.WEB.Services.PlantTimeline;
 using Midnight.EC.Plant.WEB.Utility.Json;
 using Midnight.EC.Plant.WEB.ViewModels;
@@ -28,12 +30,14 @@ public class PlantController : Controller
     private readonly PlantImageService _imageService;
     private readonly PlantAnalysisService _analysisService;
     private readonly PlantCareService _careService;
+    private readonly PlantListService _plantListService;
     private readonly PlantProfileService _profileService;
     private readonly PlantReminderService _reminderService;
     private readonly PlantTimelineService _timelineService;
     private readonly PlantKnowledgeService _knowledgeService;
     private readonly PageComposerHomeBuilder _pageComposerHomeBuilder;
     private readonly CareGuideLayoutService _careGuideLayoutService;
+    private readonly PlantEffectImageService _effectImageService;
     private readonly IImageStorageService _imageStorageService;
     private readonly ILogger<PlantController> _logger;
 
@@ -43,12 +47,14 @@ public class PlantController : Controller
         PlantImageService imageService,
         PlantAnalysisService analysisService,
         PlantCareService careService,
+        PlantListService plantListService,
         PlantProfileService profileService,
         PlantReminderService reminderService,
         PlantTimelineService timelineService,
         PlantKnowledgeService knowledgeService,
         PageComposerHomeBuilder pageComposerHomeBuilder,
         CareGuideLayoutService careGuideLayoutService,
+        PlantEffectImageService effectImageService,
         IImageStorageService imageStorageService,
         ILogger<PlantController> logger)
     {
@@ -57,12 +63,14 @@ public class PlantController : Controller
         _imageService = imageService;
         _analysisService = analysisService;
         _careService = careService;
+        _plantListService = plantListService;
         _profileService = profileService;
         _reminderService = reminderService;
         _timelineService = timelineService;
         _knowledgeService = knowledgeService;
         _pageComposerHomeBuilder = pageComposerHomeBuilder;
         _careGuideLayoutService = careGuideLayoutService;
+        _effectImageService = effectImageService;
         _imageStorageService = imageStorageService;
         _logger = logger;
     }
@@ -79,6 +87,256 @@ public class PlantController : Controller
             CarouselSlidesByModuleId = slides,
             NotificationReminders = notifications
         });
+    }
+
+    /// <summary>植栽清單：全盆健康度、澆水／肥種倒數與快速寫入。</summary>
+    [HttpGet]
+    public async Task<IActionResult> List(CancellationToken cancellationToken)
+    {
+        ViewData["Title"] = "植栽清單";
+        var rows = await _plantListService.GetListAsync(cancellationToken);
+        return View(new PlantListPageViewModel
+        {
+            Items = rows.Select(r => new PlantListRowViewModel
+            {
+                PlantId = r.PlantId,
+                DisplayName = r.DisplayName,
+                CoverImagePath = r.CoverImagePath,
+                LatestHealthScore = r.LatestHealthScore,
+                WaterDaysRemaining = r.WaterDaysRemaining,
+                Fertilizers = r.Fertilizers.Select(f => new PlantListFertilizerRowViewModel
+                {
+                    FertilizerProductId = f.FertilizerProductId,
+                    Name = f.Name,
+                    DaysRemaining = f.DaysRemaining
+                }).ToList()
+            }).ToList()
+        });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> QuickWater(Guid plantId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _careService.CreateAsync(
+                plantId,
+                DateTime.Today,
+                CareRecordType.Watering,
+                null,
+                null,
+                "植栽清單：快速澆水",
+                cancellationToken);
+            await _reminderService.SyncRemindersAsync(plantId, cancellationToken);
+            TempData["Success"] = "已標記今日澆水。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "QuickWater failed for {PlantId}", plantId);
+            TempData["Error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(List));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> QuickFertilize(
+        Guid plantId,
+        Guid? fertilizerProductId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (fertilizerProductId.HasValue)
+            {
+                var products = await _plantListService.GetFertilizersForPlantAsync(plantId, cancellationToken);
+                if (products.All(p => p.Id != fertilizerProductId.Value))
+                    throw new InvalidOperationException("找不到此肥料。");
+            }
+
+            var note = fertilizerProductId.HasValue
+                ? "植栽清單：快速施肥"
+                : "植栽清單：快速施肥（預設）";
+            await _careService.CreateAsync(
+                plantId,
+                DateTime.Today,
+                CareRecordType.Fertilizing,
+                null,
+                null,
+                note,
+                cancellationToken,
+                fertilizerProductId);
+            await _reminderService.SyncRemindersAsync(plantId, cancellationToken);
+            TempData["Success"] = "已標記今日施肥。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "QuickFertilize failed for {PlantId}", plantId);
+            TempData["Error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(List));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BatchWaterAll(CancellationToken cancellationToken)
+    {
+        var rows = await _plantListService.GetListAsync(cancellationToken);
+        var today = DateTime.Today;
+        var ok = 0;
+        foreach (var plantId in rows.Select(r => r.PlantId).Distinct())
+        {
+            try
+            {
+                await _careService.CreateAsync(
+                    plantId,
+                    today,
+                    CareRecordType.Watering,
+                    null,
+                    null,
+                    "植栽清單：一鍵全澆水",
+                    cancellationToken);
+                await _reminderService.SyncRemindersAsync(plantId, cancellationToken);
+                ok++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "BatchWaterAll failed for {PlantId}", plantId);
+            }
+        }
+
+        TempData["Success"] = ok == 0 ? "沒有可澆水的植栽。" : $"已為 {ok} 盆標記今日澆水。";
+        return RedirectToAction(nameof(List));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> BatchFertilizeAll(CancellationToken cancellationToken)
+    {
+        var rows = await _plantListService.GetListAsync(cancellationToken);
+        var today = DateTime.Today;
+        var plantOk = 0;
+        var fertOk = 0;
+        foreach (var row in rows)
+        {
+            try
+            {
+                var wrote = false;
+                foreach (var fert in row.Fertilizers)
+                {
+                    await _careService.CreateAsync(
+                        row.PlantId,
+                        today,
+                        CareRecordType.Fertilizing,
+                        null,
+                        null,
+                        "植栽清單：一鍵全施肥",
+                        cancellationToken,
+                        fert.FertilizerProductId);
+                    fertOk++;
+                    wrote = true;
+                }
+
+                if (!wrote)
+                {
+                    await _careService.CreateAsync(
+                        row.PlantId,
+                        today,
+                        CareRecordType.Fertilizing,
+                        null,
+                        null,
+                        "植栽清單：一鍵全施肥",
+                        cancellationToken);
+                    fertOk++;
+                }
+
+                await _reminderService.SyncRemindersAsync(row.PlantId, cancellationToken);
+                plantOk++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "BatchFertilizeAll failed for {PlantId}", row.PlantId);
+            }
+        }
+
+        TempData["Success"] = plantOk == 0
+            ? "沒有可施肥的植栽。"
+            : $"已為 {plantOk} 盆寫入今日施肥（共 {fertOk} 筆肥種紀錄）。";
+        return RedirectToAction(nameof(List));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddFertilizerProduct(
+        Guid id,
+        [Bind(Prefix = "NewFertilizer")] PlantFertilizerProductEditViewModel model,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            TempData["Error"] = "請檢查肥料名稱與間隔天數。";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        try
+        {
+            await _plantListService.AddFertilizerAsync(id, model.Name, model.IntervalDays, cancellationToken);
+            TempData["Success"] = "已新增盆用肥料。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AddFertilizerProduct failed for {PlantId}", id);
+            TempData["Error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateFertilizerProduct(
+        Guid id,
+        Guid fertilizerProductId,
+        PlantFertilizerProductEditViewModel model,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _plantListService.UpdateFertilizerAsync(
+                id, fertilizerProductId, model.Name, model.IntervalDays, cancellationToken);
+            TempData["Success"] = "已更新盆用肥料。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "UpdateFertilizerProduct failed for {PlantId}", id);
+            TempData["Error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteFertilizerProduct(
+        Guid id,
+        Guid fertilizerProductId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _plantListService.DeleteFertilizerAsync(id, fertilizerProductId, cancellationToken);
+            TempData["Success"] = "已刪除盆用肥料。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DeleteFertilizerProduct failed for {PlantId}", id);
+            TempData["Error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
     }
 
     [HttpPost]
@@ -294,7 +552,11 @@ public class PlantController : Controller
         try
         {
             // 先同步物種知識，才能比對環境落差；尚未建檔
-            var speciesId = await _plantService.EnsureSpeciesKnowledgeAsync(external, model.Draft.ChineseName, cancellationToken);
+            var speciesId = await _plantService.EnsureSpeciesKnowledgeAsync(
+                external,
+                model.Draft.ChineseName,
+                model.Draft.SubstrateType,
+                cancellationToken);
 
             var warnings = await BuildDraftMismatchWarningsAsync(speciesId, model.Draft, cancellationToken);
             if (warnings.Count > 0 && !model.AcknowledgeMismatch)
@@ -793,10 +1055,12 @@ public class PlantController : Controller
 
         try
         {
-            // 先確保知識以便比對落差（失敗則不換綁）
+            // 先確保知識以便比對落差（失敗則不換綁）；環境介質有值可視為土壤齊全
+            var profileForEnsure = await _profileService.GetByPlantIdAsync(model.PlantId, cancellationToken);
             var speciesId = await _plantService.EnsureSpeciesKnowledgeAsync(
                 external,
                 string.IsNullOrWhiteSpace(model.ChineseName) ? selected.ScientificName : model.ChineseName,
+                profileForEnsure?.SubstrateType,
                 cancellationToken);
 
             var warnings = await BuildPlantMismatchWarningsAsync(model.PlantId, speciesId, cancellationToken);
@@ -889,6 +1153,17 @@ public class PlantController : Controller
 
         var photos = await _imageService.GetByPlantIdAsync(id, cancellationToken);
         var cover = await _imageService.GetCoverAsync(id, cancellationToken);
+        IReadOnlyDictionary<Guid, Midnight.EC.Plant.WEB.Models.DTOs.PlantEffectImageDto> effectsByPhoto;
+        try
+        {
+            effectsByPhoto = await _effectImageService.GetLatestByPhotoIdsAsync(
+                photos.Select(p => p.Id).ToList(), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load effect images for plant {PlantId}", id);
+            effectsByPhoto = new Dictionary<Guid, Midnight.EC.Plant.WEB.Models.DTOs.PlantEffectImageDto>();
+        }
         var analyses = await _analysisService.GetByPlantIdAsync(id, cancellationToken);
         var analysesByImage = analyses
             .Where(a => a.ImageId.HasValue)
@@ -900,9 +1175,11 @@ public class PlantController : Controller
         var timeline = await _timelineService.GetTimelineAsync(id, 90, cancellationToken);
         var knowledgeVm = MapKnowledge(
             plant.Knowledge,
-            plant.Species?.ChineseName ?? plant.Name ?? plant.Species?.ScientificName);
+            plant.Species?.ChineseName ?? plant.Name ?? plant.Species?.ScientificName,
+            profile?.SubstrateType);
         var latestAnalysis = analyses.OrderByDescending(a => a.CreateDate).FirstOrDefault();
         var defaultKeyword = plant.Species?.ChineseName ?? plant.Name ?? plant.Species?.ScientificName ?? string.Empty;
+        var fertilizerProducts = await _plantListService.GetFertilizersForPlantAsync(id, cancellationToken);
 
         var model = new PlantDetailViewModel
         {
@@ -924,6 +1201,7 @@ public class PlantController : Controller
             Photos = photos.Select(p =>
             {
                 analysesByImage.TryGetValue(p.Id, out var photoAnalysis);
+                effectsByPhoto.TryGetValue(p.Id, out var effect);
                 return new PlantPhotoItemViewModel
                 {
                     Id = p.Id,
@@ -931,7 +1209,9 @@ public class PlantController : Controller
                     Note = p.Note,
                     IsCover = p.IsCover,
                     CreatedAt = p.CreateDate,
-                    LatestAnalysis = photoAnalysis == null ? null : MapAnalysis(photoAnalysis)
+                    LatestAnalysis = photoAnalysis == null ? null : MapAnalysis(photoAnalysis),
+                    LatestEffectImageId = effect?.Id,
+                    LatestEffectImageUrl = effect?.GeneratedImageUrl
                 };
             }).ToList(),
             Analyses = analyses.Select((a, index) => MapAnalysis(a, index == 0)).ToList(),
@@ -948,6 +1228,13 @@ public class PlantController : Controller
                 ? (DateTime.UtcNow.Date - trend.LastWateringDate.Value.Date).Days
                 : null,
             Profile = MapProfile(profile),
+            FertilizerProducts = fertilizerProducts.Select(f => new PlantFertilizerProductViewModel
+            {
+                Id = f.Id,
+                Name = f.Name,
+                IntervalDays = f.IntervalDays
+            }).ToList(),
+            NewFertilizer = new PlantFertilizerProductEditViewModel(),
             Reminders = reminders.Select(MapReminder).ToList(),
             NewPhoto = new CreatePhotoViewModel(),
             LogEntry = new TodayLogViewModel { LogDate = DateTime.Today }
@@ -975,11 +1262,14 @@ public class PlantController : Controller
 
         try
         {
-            var refresh = await _knowledgeService.RefreshFromExternalAsync(plant.SpeciesId, model.SpeciesKeyword.Trim(), cancellationToken);
+            var refresh = await _knowledgeService.RefreshAsync(plant.SpeciesId, model.SpeciesKeyword.Trim(), cancellationToken);
             var envFit = await _knowledgeService.RefreshEnvironmentAdviceAsync(id, cancellationToken);
 
             await _reminderService.SyncRemindersAsync(id, cancellationToken);
-            var remainingGaps = CareKnowledgeCompleteness.ListMissingFields(refresh.Knowledge);
+            var profile = await _profileService.GetByPlantIdAsync(id, cancellationToken);
+            var remainingGaps = CareKnowledgeCompleteness.ListMissingFields(
+                refresh.Knowledge,
+                profile?.SubstrateType);
             ApplySyncKnowledgeFlash(refresh.AiSupplement, refresh.AiFailureReason, envFit, remainingGaps);
         }
         catch (Exception ex)
@@ -1434,13 +1724,25 @@ public class PlantController : Controller
         };
     }
 
-    private static PlantKnowledgeViewModel? MapKnowledge(PlantKnowledgeDto? knowledge, string? plantDisplayName = null)
+    private static PlantKnowledgeViewModel? MapKnowledge(
+        PlantKnowledgeDto? knowledge,
+        string? plantDisplayName = null,
+        string? environmentSubstrateType = null)
     {
         if (knowledge == null)
         {
+            var emptyGaps = new List<string>
+            {
+                "光照", "建議日照", "澆水", "濕度", "溫度下限", "溫度上限", "土壤", "施肥", "生長季", "結構化照護指南"
+            };
+            if (!string.IsNullOrWhiteSpace(environmentSubstrateType))
+            {
+                emptyGaps.Remove("土壤");
+            }
+
             return new PlantKnowledgeViewModel
             {
-                MissingFields = ["光照", "建議日照", "澆水", "濕度", "溫度下限", "溫度上限", "土壤", "施肥", "生長季", "結構化照護指南"],
+                MissingFields = emptyGaps,
                 IsSparse = true
             };
         }
@@ -1481,7 +1783,7 @@ public class PlantController : Controller
             CareSummary = knowledge.CareSummary,
             ExternalCareGuide = externalCareGuide,
             SuggestedLight = suggestedLight,
-            MissingFields = CareKnowledgeCompleteness.ListMissingFields(knowledge).ToList()
+            MissingFields = CareKnowledgeCompleteness.ListMissingFields(knowledge, environmentSubstrateType).ToList()
         };
 
         vm.IsSparse = string.IsNullOrWhiteSpace(vm.LightRequirement)

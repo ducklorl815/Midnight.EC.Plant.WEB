@@ -1,6 +1,6 @@
 /**
  * 滾動態殼層：一進頁頂欄即貼頂跟著滾；過 Banner 底緣後改白底深色字。
- * 首頁用 fixed；拼圖預覽用 absolute + scrollTop 同步（容器內捲）。
+ * 首頁用 fixed；拼圖預覽用 sticky（容器內捲，可捲到頂）。
  */
 (function () {
   function bindShell(shell) {
@@ -15,9 +15,8 @@
     function update() {
       var pastBanner;
       if (isPreview) {
-        var y = shell.scrollTop;
-        header.style.top = y + "px";
-        pastBanner = y >= banner.offsetTop + banner.offsetHeight;
+        header.style.top = "";
+        pastBanner = shell.scrollTop >= banner.offsetTop + banner.offsetHeight - header.offsetHeight;
       } else {
         header.style.top = "";
         pastBanner = banner.getBoundingClientRect().bottom <= 0;

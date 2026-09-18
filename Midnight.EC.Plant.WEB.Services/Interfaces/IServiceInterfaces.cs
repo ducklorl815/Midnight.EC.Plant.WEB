@@ -1,6 +1,4 @@
 using Midnight.EC.Plant.WEB.Models.Enums;
-using Midnight.EC.Plant.WEB.Models.External;
-using Midnight.EC.Plant.WEB.Models.AI;
 
 namespace Midnight.EC.Plant.WEB.Services.Interfaces;
 
@@ -22,19 +20,14 @@ public class CreatePlantDraft
     public bool EnvironmentMismatchAcknowledged { get; set; }
 }
 
-public interface IExternalPlantApiService
-{
-    Task<ExternalPlantSearchResult?> SearchSpeciesAsync(string keyword, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<ExternalSpeciesResult>> SearchSpeciesCandidatesAsync(string keyword, CancellationToken cancellationToken = default);
-    Task<PlantIdentificationResult?> IdentifyFromImageAsync(Stream imageStream, string fileName, CancellationToken cancellationToken = default);
-}
-
 public interface IImageStorageService
 {
     Task<StoredImageResult> SaveAsync(Stream stream, string originalFileName, string contentType, Guid plantId, CancellationToken cancellationToken = default);
     /// <summary>站點級媒體（如拼圖 Banner），不屬於任何一盆。</summary>
     Task<StoredImageResult> SaveSiteMediaAsync(Stream stream, string originalFileName, string contentType, string relativeSubfolder, CancellationToken cancellationToken = default);
+    Task<StoredImageResult> SaveEffectAsync(Stream stream, string fileName, string contentType, Guid plantId, CancellationToken cancellationToken = default);
     string GetPublicPath(string storagePath);
+    string GetAbsolutePath(string storagePath);
 }
 
 public class StoredImageResult
@@ -44,26 +37,4 @@ public class StoredImageResult
     public string? ThumbnailPath { get; set; }
     public long FileSize { get; set; }
     public string? Sha256 { get; set; }
-}
-
-public interface IAIAgentService
-{
-    Task<PlantAnalysisResultDto> AnalyzePlantAsync(PlantAnalysisContext context, CancellationToken cancellationToken = default);
-}
-
-public interface ICareKnowledgeSynthesisService
-{
-    Task<CareSynthesisResult> SynthesizeAsync(
-        string speciesKeyword,
-        string? scientificName,
-        ExternalKnowledgeResult mergedKnowledge,
-        CancellationToken cancellationToken = default,
-        bool forceRefreshGuide = false);
-
-    Task<EnvironmentFitResult> SynthesizeEnvironmentFitAsync(
-        string plantDisplayName,
-        string? scientificName,
-        ExternalKnowledgeResult knowledge,
-        PlantEnvironmentContext environment,
-        CancellationToken cancellationToken = default);
 }

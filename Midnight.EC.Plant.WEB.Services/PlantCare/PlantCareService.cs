@@ -35,19 +35,22 @@ public class PlantCareService
         decimal? numericValue,
         string? unit,
         string? note,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? fertilizerProductId = null)
     {
         var plant = await _plantRepository.GetByIdAsync(plantId, cancellationToken)
             ?? throw new InvalidOperationException("找不到植物。");
 
         var day = recordDate.Date;
-        // Spec: same plant + same calendar day + same care type → one record
+        // 同盆＋同日＋同類型；施肥時再加 FertilizerProductID（不同肥可同日各一筆）
         if (careType is CareRecordType.Watering or CareRecordType.Fertilizing)
         {
-            var existing = await _careRepository.FindSameDayAsync(plant.Id, day, careType, cancellationToken);
+            var existing = await _careRepository.FindSameDayAsync(
+                plant.Id, day, careType, fertilizerProductId, cancellationToken);
             if (existing != null)
             {
                 existing.RecordDate = day;
+                existing.FertilizerProductID = fertilizerProductId;
                 if (!string.IsNullOrWhiteSpace(note))
                 {
                     existing.Note = note;
@@ -69,6 +72,7 @@ public class PlantCareService
             PlantId = plant.Id,
             RecordDate = day,
             CareType = careType,
+            FertilizerProductID = fertilizerProductId,
             NumericValue = numericValue,
             Unit = unit,
             Note = note,
@@ -79,37 +83,36 @@ public class PlantCareService
         return record.ToDto();
     }
 
+    public async Task SoftDeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        => await _careRepository.SoftDeleteAsync(id, cancellationToken);
+
     public async Task<PlantTrendDto> GetTrendAsync(Guid plantId, int days = 30, CancellationToken cancellationToken = default)
     {
-        var since = DateTime.UtcNow.Date.AddDays(-days + 1);
+        var since = DateTime.Today.AddDays(-(days - 1));
         var careRecords = await _careRepository.GetRecentByPlantIdAsync(plantId, since, cancellationToken);
         var analyses = await _analysisRepository.GetByPlantIdAsync(plantId, cancellationToken);
-        var recentAnalyses = analyses.Where(a => a.CreateDate >= since).ToList();
 
         var trend = new PlantTrendDto();
         for (var i = 0; i < days; i++)
         {
-            var date = since.AddDays(i);
-            var label = date.ToString("MM/dd");
-            trend.Labels.Add(label);
+            var day = since.AddDays(i).Date;
+            trend.Labels.Add(day.ToString("MM/dd"));
+            var dayCare = careRecords.Where(r => r.RecordDate.Date == day).ToList();
+            var dayAnalysis = analyses
+                .Where(a => a.CreateDate.Date == day)
+                .OrderByDescending(a => a.CreateDate)
+                .FirstOrDefault();
 
-            var dayCare = careRecords.Where(r => r.RecordDate.Date == date.Date).ToList();
             trend.Temperatures.Add(AverageValue(dayCare, CareRecordType.Temperature));
             trend.Humidities.Add(AverageValue(dayCare, CareRecordType.Humidity));
             trend.LightLevels.Add(AverageValue(dayCare, CareRecordType.Light));
             trend.WateringCounts.Add(dayCare.Count(r => r.CareType == CareRecordType.Watering));
-
-            var dayAnalysis = recentAnalyses
-                .Where(a => a.CreateDate.Date == date.Date)
-                .OrderByDescending(a => a.CreateDate)
-                .FirstOrDefault();
             trend.HealthScores.Add(dayAnalysis?.HealthScore);
         }
 
         var wateringRecords = careRecords.Where(r => r.CareType == CareRecordType.Watering).ToList();
         trend.TotalWateringCount = wateringRecords.Count;
         trend.LastWateringDate = wateringRecords.OrderByDescending(r => r.RecordDate).FirstOrDefault()?.RecordDate;
-
         return trend;
     }
 

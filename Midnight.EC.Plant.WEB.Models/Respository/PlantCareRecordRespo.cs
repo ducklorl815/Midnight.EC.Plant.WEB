@@ -14,7 +14,7 @@ public class PlantCareRecordRespo
 
     private const string SelectSql = @"
 SELECT ID, Seq, CreateDate, ModifyDate, Enabled, Deleted, PlantID,
-       RecordDate, CareType, NumericValue, Unit, Note
+       RecordDate, CareType, FertilizerProductID, NumericValue, Unit, Note
 FROM dbo.PlantCareRecord WHERE Deleted = 0";
 
     public async Task<List<PlantCareRecordModel>> GetByPlantIdAsync(Guid plantId, CancellationToken cancellationToken = default)
@@ -57,15 +57,66 @@ GROUP BY PlantID",
         return rows.ToDictionary(r => r.PlantID, r => r.LastDate);
     }
 
+    /// <summary>各盆用肥料最近一次施肥日（僅掛有 FertilizerProductID 的紀錄）。</summary>
+    public async Task<Dictionary<Guid, DateTime>> GetLastFertilizingDatesByProductIdsAsync(
+        IEnumerable<Guid> fertilizerProductIds,
+        CancellationToken cancellationToken = default)
+    {
+        var idList = fertilizerProductIds.Distinct().ToList();
+        if (idList.Count == 0) return new Dictionary<Guid, DateTime>();
+
+        using var conn = Conn();
+        var rows = await conn.QueryAsync<(Guid FertilizerProductID, DateTime LastDate)>(new CommandDefinition(@"
+SELECT FertilizerProductID, MAX(RecordDate) AS LastDate
+FROM dbo.PlantCareRecord
+WHERE Deleted = 0 AND Enabled = 1 AND CareType = @CareType
+  AND FertilizerProductID IN @Ids
+GROUP BY FertilizerProductID",
+            new { CareType = (int)CareRecordType.Fertilizing, Ids = idList },
+            cancellationToken: cancellationToken));
+        return rows.ToDictionary(r => r.FertilizerProductID, r => r.LastDate);
+    }
+
     public async Task<PlantCareRecordModel?> FindSameDayAsync(
-        Guid plantId, DateTime recordDate, CareRecordType careType, CancellationToken cancellationToken = default)
+        Guid plantId,
+        DateTime recordDate,
+        CareRecordType careType,
+        Guid? fertilizerProductId = null,
+        CancellationToken cancellationToken = default)
     {
         var day = recordDate.Date;
         using var conn = Conn();
+        if (careType == CareRecordType.Fertilizing && fertilizerProductId.HasValue)
+        {
+            return await conn.QueryFirstOrDefaultAsync<PlantCareRecordModel>(new CommandDefinition(
+                SelectSql + @" AND Enabled = 1 AND PlantID = @PlantId AND CareType = @CareType
+                               AND FertilizerProductID = @ProductId
+                               AND CONVERT(date, RecordDate) = @Day",
+                new
+                {
+                    PlantId = plantId,
+                    CareType = (int)careType,
+                    ProductId = fertilizerProductId.Value,
+                    Day = day
+                },
+                cancellationToken: cancellationToken));
+        }
+
+        if (careType == CareRecordType.Fertilizing)
+        {
+            return await conn.QueryFirstOrDefaultAsync<PlantCareRecordModel>(new CommandDefinition(
+                SelectSql + @" AND Enabled = 1 AND PlantID = @PlantId AND CareType = @CareType
+                               AND FertilizerProductID IS NULL
+                               AND CONVERT(date, RecordDate) = @Day",
+                new { PlantId = plantId, CareType = (int)careType, Day = day },
+                cancellationToken: cancellationToken));
+        }
+
         return await conn.QueryFirstOrDefaultAsync<PlantCareRecordModel>(new CommandDefinition(
             SelectSql + @" AND Enabled = 1 AND PlantID = @PlantId AND CareType = @CareType
                            AND CONVERT(date, RecordDate) = @Day",
-            new { PlantId = plantId, CareType = (int)careType, Day = day }, cancellationToken: cancellationToken));
+            new { PlantId = plantId, CareType = (int)careType, Day = day },
+            cancellationToken: cancellationToken));
     }
 
     public async Task InsertAsync(PlantCareRecordModel record, CancellationToken cancellationToken = default)
@@ -79,9 +130,9 @@ GROUP BY PlantID",
 
         const string sql = @"
 INSERT INTO dbo.PlantCareRecord
-    (ID, CreateDate, ModifyDate, Enabled, Deleted, PlantID, RecordDate, CareType, NumericValue, Unit, Note)
+    (ID, CreateDate, ModifyDate, Enabled, Deleted, PlantID, RecordDate, CareType, FertilizerProductID, NumericValue, Unit, Note)
 VALUES
-    (@ID, @CreateDate, @ModifyDate, @Enabled, @Deleted, @PlantID, @RecordDate, @CareType, @NumericValue, @Unit, @Note);
+    (@ID, @CreateDate, @ModifyDate, @Enabled, @Deleted, @PlantID, @RecordDate, @CareType, @FertilizerProductID, @NumericValue, @Unit, @Note);
 SELECT CAST(SCOPE_IDENTITY() AS int);";
         using var conn = Conn();
         record.Seq = await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, DbParams.From(record), cancellationToken: cancellationToken));
@@ -93,6 +144,7 @@ SELECT CAST(SCOPE_IDENTITY() AS int);";
         const string sql = @"
 UPDATE dbo.PlantCareRecord SET
     ModifyDate = @ModifyDate, RecordDate = @RecordDate, CareType = @CareType,
+    FertilizerProductID = @FertilizerProductID,
     NumericValue = @NumericValue, Unit = @Unit, Note = @Note
 WHERE ID = @ID AND Deleted = 0";
         using var conn = Conn();

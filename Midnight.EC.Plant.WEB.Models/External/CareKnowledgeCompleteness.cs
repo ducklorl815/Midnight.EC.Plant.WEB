@@ -8,18 +8,21 @@ namespace Midnight.EC.Plant.WEB.Models.External;
 /// </summary>
 public static class CareKnowledgeCompleteness
 {
-    public static bool HasGaps(ExternalKnowledgeResult knowledge) =>
-        ListMissingFields(knowledge).Count > 0;
+    public static bool HasGaps(ExternalKnowledgeResult knowledge, string? environmentSubstrateType = null) =>
+        ListMissingFields(knowledge, environmentSubstrateType).Count > 0;
 
-    public static bool HasGaps(PlantKnowledgeModel knowledge) =>
-        ListMissingFields(knowledge).Count > 0;
+    public static bool HasGaps(PlantKnowledgeModel knowledge, string? environmentSubstrateType = null) =>
+        ListMissingFields(knowledge, environmentSubstrateType).Count > 0;
 
-    public static bool HasGaps(Midnight.EC.Plant.WEB.Models.DTOs.PlantKnowledgeDto knowledge) =>
-        ListMissingFields(knowledge).Count > 0;
+    public static bool HasGaps(Midnight.EC.Plant.WEB.Models.DTOs.PlantKnowledgeDto knowledge, string? environmentSubstrateType = null) =>
+        ListMissingFields(knowledge, environmentSubstrateType).Count > 0;
 
-    public static IReadOnlyList<string> ListMissingFields(ExternalKnowledgeResult knowledge)
+    public static IReadOnlyList<string> ListMissingFields(
+        ExternalKnowledgeResult knowledge,
+        string? environmentSubstrateType = null)
     {
         var missing = new List<string>();
+        var guide = CareGuideJson.TryParseSpeciesGuide(knowledge.ExternalCareGuide);
         AddIfBlank(missing, "光照", knowledge.LightRequirement);
         if (!ResolveSuggestedLight(knowledge.SuggestedLight, knowledge.LightRequirement, knowledge.CareSummary, knowledge.ExternalCareGuide).HasValue)
         {
@@ -38,26 +41,20 @@ public static class CareKnowledgeCompleteness
             missing.Add("溫度上限");
         }
 
-        AddIfBlank(missing, "土壤", knowledge.SoilRequirement);
+        AddSoilIfMissing(missing, guide, knowledge.SoilRequirement, environmentSubstrateType);
         AddIfBlank(missing, "施肥", knowledge.FertilizerRequirement);
         AddIfBlank(missing, "生長季", knowledge.GrowthSeason);
-        if (IsBlank(knowledge.ExternalCareGuide) || CareGuideJson.TryParseSpeciesGuide(knowledge.ExternalCareGuide) == null)
+        if (IsBlank(knowledge.ExternalCareGuide) || guide == null)
         {
             missing.Add("結構化照護指南");
-        }
-        else
-        {
-            var guide = CareGuideJson.TryParseSpeciesGuide(knowledge.ExternalCareGuide);
-            if (guide?.QuickFacts == null || !guide.QuickFacts.HasAny())
-            {
-                // v2 相容：有模組／舊段落即可；缺 quickFacts 不算硬缺口（重產後才齊）
-            }
         }
 
         return missing;
     }
 
-    public static IReadOnlyList<string> ListMissingFields(PlantKnowledgeModel knowledge) =>
+    public static IReadOnlyList<string> ListMissingFields(
+        PlantKnowledgeModel knowledge,
+        string? environmentSubstrateType = null) =>
         ListMissingFields(
             knowledge.SuggestedLight,
             knowledge.LightRequirement,
@@ -69,9 +66,12 @@ public static class CareKnowledgeCompleteness
             knowledge.FertilizerRequirement,
             knowledge.GrowthSeason,
             knowledge.CareSummary,
-            knowledge.ExternalCareGuide);
+            knowledge.ExternalCareGuide,
+            environmentSubstrateType);
 
-    public static IReadOnlyList<string> ListMissingFields(Midnight.EC.Plant.WEB.Models.DTOs.PlantKnowledgeDto knowledge) =>
+    public static IReadOnlyList<string> ListMissingFields(
+        Midnight.EC.Plant.WEB.Models.DTOs.PlantKnowledgeDto knowledge,
+        string? environmentSubstrateType = null) =>
         ListMissingFields(
             knowledge.SuggestedLight,
             knowledge.LightRequirement,
@@ -83,7 +83,8 @@ public static class CareKnowledgeCompleteness
             knowledge.FertilizerRequirement,
             knowledge.GrowthSeason,
             knowledge.CareSummary,
-            knowledge.ExternalCareGuide);
+            knowledge.ExternalCareGuide,
+            environmentSubstrateType);
 
     public static LightLevel? ResolveSuggestedLight(
         LightLevel? stored,
@@ -106,7 +107,8 @@ public static class CareKnowledgeCompleteness
         string? fertilizerRequirement,
         string? growthSeason,
         string? careSummary,
-        string? externalCareGuide)
+        string? externalCareGuide,
+        string? environmentSubstrateType = null)
     {
         var missing = new List<string>();
         var guide = CareGuideJson.TryParseSpeciesGuide(externalCareGuide);
@@ -123,10 +125,7 @@ public static class CareKnowledgeCompleteness
             if (!temperatureMin.HasValue) missing.Add("溫度下限");
             if (!temperatureMax.HasValue) missing.Add("溫度上限");
 
-            if (guide.FindModule(CareGuideModuleIds.Soil) == null)
-            {
-                AddIfBlank(missing, "土壤", soilRequirement);
-            }
+            AddSoilIfMissing(missing, guide, soilRequirement, environmentSubstrateType);
 
             if (guide.FertilizerRecipe == null
                 && guide.Fertilizer == null
@@ -154,11 +153,38 @@ public static class CareKnowledgeCompleteness
         AddIfBlank(missing, "濕度", humidityRequirement);
         if (!temperatureMin.HasValue) missing.Add("溫度下限");
         if (!temperatureMax.HasValue) missing.Add("溫度上限");
-        AddIfBlank(missing, "土壤", soilRequirement);
+        AddSoilIfMissing(missing, guide, soilRequirement, environmentSubstrateType);
         AddIfBlank(missing, "施肥", fertilizerRequirement);
         AddIfBlank(missing, "生長季", growthSeason);
         missing.Add("結構化照護指南");
         return missing;
+    }
+
+    /// <summary>
+    /// 土壤齊全條件：植株環境介質、物種短欄、或 soil 模組任一有內容。
+    /// </summary>
+    private static void AddSoilIfMissing(
+        List<string> missing,
+        SpeciesCareGuideDto? guide,
+        string? soilRequirement,
+        string? environmentSubstrateType)
+    {
+        if (!IsBlank(environmentSubstrateType))
+        {
+            return;
+        }
+
+        if (guide?.FindModule(CareGuideModuleIds.Soil) is { } soil && soil.HasContent())
+        {
+            return;
+        }
+
+        if (!IsBlank(guide?.Substrate))
+        {
+            return;
+        }
+
+        AddIfBlank(missing, "土壤", soilRequirement);
     }
 
     private static void AddIfBlank(List<string> missing, string label, string? value)

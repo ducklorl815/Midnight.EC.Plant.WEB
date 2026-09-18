@@ -39,6 +39,14 @@ public class PageComposerService
     {
         var normalized = Normalize(layout);
         var json = JsonSerializer.Serialize(normalized, JsonOptions);
+        var wallFrames = normalized.Modules
+            .Where(m => m.Type == PageModuleType.PlantDetailWallCarousel)
+            .Sum(m => m.SlideFrames?.Count ?? 0);
+        _logger.LogInformation(
+            "Saving page composer layout: {ModuleCount} modules, {WallFrameCount} detail-wall slide frames, jsonLength={JsonLength}",
+            normalized.Modules.Count,
+            wallFrames,
+            json.Length);
         await _layoutRespo.UpsertAsync(new PageComposerLayoutModel
         {
             LayoutKey = PageComposerLayoutDto.DefaultKey,
@@ -352,9 +360,12 @@ public class PageComposerService
             cleaned.Add(new PageComposerSlideFrameDto
             {
                 PlantId = frame.PlantId,
-                Zoom = frame.Zoom <= 0 ? 1 : Math.Clamp(frame.Zoom, 0.05, 8),
-                FocusX = Math.Clamp(frame.FocusX, 0, 100),
-                FocusY = Math.Clamp(frame.FocusY, 0, 100)
+                EffectImageId = frame.EffectImageId is Guid eid && eid != Guid.Empty ? eid : null,
+                EffectImageUrl = string.IsNullOrWhiteSpace(frame.EffectImageUrl)
+                    ? null
+                    : frame.EffectImageUrl.Trim(),
+                CardX = double.IsNaN(frame.CardX) ? 6 : Math.Clamp(frame.CardX, 0, 72),
+                CardY = double.IsNaN(frame.CardY) ? 22 : Math.Clamp(frame.CardY, 0, 78)
             });
         }
 

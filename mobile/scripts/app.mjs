@@ -26,6 +26,10 @@ function firstExisting(paths) {
   return null;
 }
 
+function normalizeJavaHome(home) {
+  return home.replace(/[\\/]+$/, '');
+}
+
 function resolveJavaHome() {
   const fromEnv = process.env.JAVA_HOME?.trim();
   if (fromEnv) {
@@ -36,7 +40,7 @@ function resolveJavaHome() {
       });
       const text = `${v.stderr || ''}${v.stdout || ''}`;
       const m = text.match(/version "(\d+)/);
-      if (m && Number(m[1]) <= 20) return fromEnv;
+      if (m && Number(m[1]) <= 20) return normalizeJavaHome(fromEnv);
       if (m) console.warn(`[app] JAVA_HOME is Java ${m[1]}; searching JDK 17…`);
     } catch {
       /* fall through */
@@ -58,7 +62,8 @@ function resolveJavaHome() {
     }
   }
   candidates.push(join(programFiles, 'Java', 'jdk-17'));
-  return firstExisting(candidates);
+  const found = firstExisting(candidates);
+  return found ? normalizeJavaHome(found) : null;
 }
 
 function resolveAndroidSdk() {
@@ -107,13 +112,33 @@ function writeCapacitorConfig(serverUrl) {
   writeFileSync(join(mobileRoot, 'capacitor.config.json'), JSON.stringify(config, null, 2));
 }
 
+function quoteCmd(value) {
+  const text = String(value);
+  if (text.length === 0) return '""';
+  if (!/[ \t"&|<>^%]/.test(text)) return text;
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
 function run(command, args, cwd, env) {
-  const result = spawnSync(command, args, {
+  const isBat = process.platform === 'win32' && /\.(bat|cmd)$/i.test(command);
+  const options = {
     cwd,
-    shell: true,
     stdio: 'inherit',
     env: env || process.env,
-  });
+  };
+  let file = command;
+  let argv = args;
+  if (isBat) {
+    // cmd.exe /s strips one outer pair of quotes, so quote each token ourselves.
+    file = process.env.ComSpec || 'cmd.exe';
+    argv = ['/d', '/s', '/c', [command, ...args].map(quoteCmd).join(' ')];
+    options.windowsVerbatimArguments = true;
+  }
+  const result = spawnSync(file, argv, options);
+  if (result.error) {
+    console.error(result.error.message);
+    process.exit(1);
+  }
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
@@ -175,7 +200,7 @@ function assemble(signing, env) {
   const isWin = process.platform === 'win32';
   const gradlew = isWin ? 'gradlew.bat' : './gradlew';
   run(gradlew, [
-    'assembleRelease',
+    ':app:assembleRelease',
     `-Pandroid.injected.signing.store.file=${signing.storeFile}`,
     `-Pandroid.injected.signing.store.password=${signing.storePassword}`,
     `-Pandroid.injected.signing.key.alias=${signing.keyAlias}`,

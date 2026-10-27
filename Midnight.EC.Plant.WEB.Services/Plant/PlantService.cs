@@ -9,7 +9,6 @@ using Midnight.EC.Plant.WEB.Services.AI;
 using Midnight.EC.Plant.WEB.Services.Interfaces;
 using Midnight.EC.Plant.WEB.Services.PlantKnowledge;
 using Midnight.EC.Plant.WEB.Services.PlantProfile;
-using Midnight.EC.Plant.WEB.Services.PlantCare;
 
 namespace Midnight.EC.Plant.WEB.Services.Plant;
 
@@ -23,7 +22,6 @@ public class PlantService
     private readonly OpenAISpeciesFinderService _speciesFinder;
     private readonly PlantKnowledgeService _plantKnowledgeService;
     private readonly PlantProfileService _plantProfileService;
-    private readonly PlantCareService _plantCareService;
     private readonly ILogger<PlantService> _logger;
 
     public PlantService(
@@ -32,7 +30,6 @@ public class PlantService
         OpenAISpeciesFinderService speciesFinder,
         PlantKnowledgeService plantKnowledgeService,
         PlantProfileService plantProfileService,
-        PlantCareService plantCareService,
         ILogger<PlantService> logger)
     {
         _plantRepository = plantRepository;
@@ -40,7 +37,6 @@ public class PlantService
         _speciesFinder = speciesFinder;
         _plantKnowledgeService = plantKnowledgeService;
         _plantProfileService = plantProfileService;
-        _plantCareService = plantCareService;
         _logger = logger;
     }
 
@@ -201,18 +197,6 @@ public class PlantService
             City = draft.City,
             EnvironmentMismatchAcknowledged = draft.EnvironmentMismatchAcknowledged
         }, cancellationToken);
-
-        if (draft.WateredToday)
-        {
-            await _plantCareService.CreateAsync(
-                plant.ID,
-                DateTime.Today,
-                CareRecordType.Watering,
-                null,
-                null,
-                "建檔時標記今日已澆水",
-                cancellationToken);
-        }
 
         var created = await _plantRepository.GetByIdWithDetailsAsync(plant.ID, cancellationToken)
             ?? throw new InvalidOperationException("建立植物後無法讀取資料。");

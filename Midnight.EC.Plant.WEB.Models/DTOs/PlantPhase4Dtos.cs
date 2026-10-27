@@ -85,6 +85,10 @@ public class PlantTimelineEventDto
 
     public Guid? RelatedId { get; set; }
 
+    public Guid? DiaryId { get; set; }
+
+    public List<string> ImageStoragePaths { get; set; } = [];
+
     public int? HealthScore { get; set; }
 
 }

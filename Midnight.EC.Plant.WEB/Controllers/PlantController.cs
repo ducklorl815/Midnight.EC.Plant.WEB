@@ -116,331 +116,91 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> QuickWater(Guid plantId, CancellationToken cancellationToken)
+    public IActionResult QuickWater(Guid plantId)
     {
-        try
-        {
-            await _careService.CreateAsync(
-                plantId,
-                DateTime.Today,
-                CareRecordType.Watering,
-                null,
-                null,
-                "植栽清單：快速澆水",
-                cancellationToken);
-            await _reminderService.SyncRemindersAsync(plantId, cancellationToken);
-            TempData["Success"] = "已標記今日澆水。";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "QuickWater failed for {PlantId}", plantId);
-            TempData["Error"] = ex.Message;
-        }
-
+        _ = plantId;
+        TempData["Error"] = "已不再記錄澆水。";
         return RedirectToAction(nameof(List));
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> QuickFertilize(
-        Guid plantId,
-        Guid? fertilizerProductId,
-        CancellationToken cancellationToken)
+    public IActionResult QuickFertilize(Guid plantId, Guid? fertilizerProductId)
     {
-        try
-        {
-            if (fertilizerProductId.HasValue)
-            {
-                var products = await _plantListService.GetFertilizersForPlantAsync(plantId, cancellationToken);
-                if (products.All(p => p.Id != fertilizerProductId.Value))
-                    throw new InvalidOperationException("找不到此肥料。");
-            }
-
-            var note = fertilizerProductId.HasValue
-                ? "植栽清單：快速施肥"
-                : "植栽清單：快速施肥（預設）";
-            await _careService.CreateAsync(
-                plantId,
-                DateTime.Today,
-                CareRecordType.Fertilizing,
-                null,
-                null,
-                note,
-                cancellationToken,
-                fertilizerProductId);
-            await _reminderService.SyncRemindersAsync(plantId, cancellationToken);
-            TempData["Success"] = "已標記今日施肥。";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "QuickFertilize failed for {PlantId}", plantId);
-            TempData["Error"] = ex.Message;
-        }
-
+        _ = plantId;
+        _ = fertilizerProductId;
+        TempData["Error"] = "已不再記錄施肥。";
         return RedirectToAction(nameof(List));
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> BatchWaterAll(CancellationToken cancellationToken)
+    public IActionResult BatchWaterAll()
     {
-        var rows = await _plantListService.GetListAsync(cancellationToken);
-        var today = DateTime.Today;
-        var ok = 0;
-        foreach (var plantId in rows.Select(r => r.PlantId).Distinct())
-        {
-            try
-            {
-                await _careService.CreateAsync(
-                    plantId,
-                    today,
-                    CareRecordType.Watering,
-                    null,
-                    null,
-                    "植栽清單：一鍵全澆水",
-                    cancellationToken);
-                await _reminderService.SyncRemindersAsync(plantId, cancellationToken);
-                ok++;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "BatchWaterAll failed for {PlantId}", plantId);
-            }
-        }
-
-        TempData["Success"] = ok == 0 ? "沒有可澆水的植栽。" : $"已為 {ok} 盆標記今日澆水。";
+        TempData["Error"] = "已不再記錄澆水。";
         return RedirectToAction(nameof(List));
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> BatchFertilizeAll(CancellationToken cancellationToken)
+    public IActionResult BatchFertilizeAll()
     {
-        var rows = await _plantListService.GetListAsync(cancellationToken);
-        var today = DateTime.Today;
-        var plantOk = 0;
-        var fertOk = 0;
-        foreach (var row in rows)
-        {
-            try
-            {
-                var wrote = false;
-                foreach (var fert in row.Fertilizers)
-                {
-                    await _careService.CreateAsync(
-                        row.PlantId,
-                        today,
-                        CareRecordType.Fertilizing,
-                        null,
-                        null,
-                        "植栽清單：一鍵全施肥",
-                        cancellationToken,
-                        fert.FertilizerProductId);
-                    fertOk++;
-                    wrote = true;
-                }
-
-                if (!wrote)
-                {
-                    await _careService.CreateAsync(
-                        row.PlantId,
-                        today,
-                        CareRecordType.Fertilizing,
-                        null,
-                        null,
-                        "植栽清單：一鍵全施肥",
-                        cancellationToken);
-                    fertOk++;
-                }
-
-                await _reminderService.SyncRemindersAsync(row.PlantId, cancellationToken);
-                plantOk++;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "BatchFertilizeAll failed for {PlantId}", row.PlantId);
-            }
-        }
-
-        TempData["Success"] = plantOk == 0
-            ? "沒有可施肥的植栽。"
-            : $"已為 {plantOk} 盆寫入今日施肥（共 {fertOk} 筆肥種紀錄）。";
+        TempData["Error"] = "已不再記錄施肥。";
         return RedirectToAction(nameof(List));
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddFertilizerProduct(
-        Guid id,
-        [Bind(Prefix = "NewFertilizer")] PlantFertilizerProductEditViewModel model,
-        CancellationToken cancellationToken)
+    public IActionResult AddFertilizerProduct(Guid id)
     {
-        if (!ModelState.IsValid)
-        {
-            TempData["Error"] = "請檢查肥料名稱與間隔天數。";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        try
-        {
-            await _plantListService.AddFertilizerAsync(id, model.Name, model.IntervalDays, cancellationToken);
-            TempData["Success"] = "已新增盆用肥料。";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "AddFertilizerProduct failed for {PlantId}", id);
-            TempData["Error"] = ex.Message;
-        }
-
+        TempData["Error"] = "已不再使用盆用肥料。";
         return RedirectToAction(nameof(Details), new { id });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UpdateFertilizerProduct(
-        Guid id,
-        Guid fertilizerProductId,
-        PlantFertilizerProductEditViewModel model,
-        CancellationToken cancellationToken)
+    public IActionResult UpdateFertilizerProduct(Guid id, Guid fertilizerProductId)
     {
-        try
-        {
-            await _plantListService.UpdateFertilizerAsync(
-                id, fertilizerProductId, model.Name, model.IntervalDays, cancellationToken);
-            TempData["Success"] = "已更新盆用肥料。";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "UpdateFertilizerProduct failed for {PlantId}", id);
-            TempData["Error"] = ex.Message;
-        }
-
+        _ = fertilizerProductId;
+        TempData["Error"] = "已不再使用盆用肥料。";
         return RedirectToAction(nameof(Details), new { id });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> DeleteFertilizerProduct(
-        Guid id,
-        Guid fertilizerProductId,
-        CancellationToken cancellationToken)
+    public IActionResult DeleteFertilizerProduct(Guid id, Guid fertilizerProductId)
     {
-        try
-        {
-            await _plantListService.DeleteFertilizerAsync(id, fertilizerProductId, cancellationToken);
-            TempData["Success"] = "已刪除盆用肥料。";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "DeleteFertilizerProduct failed for {PlantId}", id);
-            TempData["Error"] = ex.Message;
-        }
-
+        _ = fertilizerProductId;
+        TempData["Error"] = "已不再使用盆用肥料。";
         return RedirectToAction(nameof(Details), new { id });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CompleteCareFromReminder(
-        Guid plantId,
-        Guid reminderId,
-        CancellationToken cancellationToken)
+    public IActionResult CompleteCareFromReminder(Guid plantId, Guid reminderId)
     {
-        try
-        {
-            var reminder = await _reminderService.GetActiveByPlantIdAsync(plantId, cancellationToken);
-            var target = reminder.FirstOrDefault(r => r.Id == reminderId && r.PlantId == plantId);
-            if (target == null)
-            {
-                TempData["Error"] = "找不到這則提醒。";
-                return RedirectToAction(nameof(Index));
-            }
-
-            if (target.ReminderType is not (ReminderType.Watering or ReminderType.Fertilizing))
-            {
-                TempData["Error"] = "此提醒無法一鍵完成。";
-                return RedirectToAction(nameof(Index));
-            }
-
-            var careType = target.ReminderType == ReminderType.Watering
-                ? CareRecordType.Watering
-                : CareRecordType.Fertilizing;
-            var note = careType == CareRecordType.Watering
-                ? "通知提醒：已澆水"
-                : "通知提醒：已施肥";
-
-            await _careService.CreateAsync(plantId, DateTime.Today, careType, null, null, note, cancellationToken);
-            await _reminderService.SyncRemindersAsync(plantId, cancellationToken);
-            TempData["Success"] = careType == CareRecordType.Watering ? "已標記今日澆水。" : "已標記今日施肥。";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "CompleteCareFromReminder failed for plant {PlantId} reminder {ReminderId}", plantId, reminderId);
-            TempData["Error"] = ex.Message;
-        }
-
+        _ = plantId;
+        _ = reminderId;
+        TempData["Error"] = "已不再記錄澆水或施肥。";
         return RedirectToAction(nameof(Index));
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> BatchWater(Guid[]? plantIds, CancellationToken cancellationToken)
+    public IActionResult BatchWater(Guid[]? plantIds)
     {
-        if (plantIds == null || plantIds.Length == 0)
-        {
-            TempData["Error"] = "請至少勾選一盆再批次已澆水。";
-            return RedirectToAction(nameof(Index));
-        }
-
-        var today = DateTime.Today;
-        var ok = 0;
-        foreach (var id in plantIds.Distinct())
-        {
-            try
-            {
-                await _careService.CreateAsync(id, today, CareRecordType.Watering, null, null, "首頁批次已澆水", cancellationToken);
-                await _reminderService.SyncRemindersAsync(id, cancellationToken);
-                ok++;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Batch water failed for plant {PlantId}", id);
-            }
-        }
-
-        TempData["Success"] = $"已為 {ok} 盆標記今日澆水。";
+        _ = plantIds;
+        TempData["Error"] = "已不再記錄澆水。";
         return RedirectToAction(nameof(Index));
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SetLastWateringDate(Guid plantId, DateTime lastWateringDate, CancellationToken cancellationToken)
+    public IActionResult SetLastWateringDate(Guid plantId, DateTime lastWateringDate)
     {
-        if (lastWateringDate.Date > DateTime.Today)
-        {
-            TempData["Error"] = "上次澆水日不能是未來。";
-            return RedirectToAction(nameof(Index));
-        }
-
-        try
-        {
-            await _careService.CreateAsync(
-                plantId,
-                lastWateringDate.Date,
-                CareRecordType.Watering,
-                null,
-                null,
-                "補上次澆水日",
-                cancellationToken);
-            await _reminderService.SyncRemindersAsync(plantId, cancellationToken);
-            TempData["Success"] = "已補上澆水日起點。";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "SetLastWateringDate failed");
-            TempData["Error"] = ex.Message;
-        }
-
+        _ = plantId;
+        _ = lastWateringDate;
+        TempData["Error"] = "已不再記錄澆水。";
         return RedirectToAction(nameof(Index));
     }
 
@@ -472,7 +232,7 @@ public class PlantController : Controller
     [HttpGet]
     public IActionResult Create()
     {
-        return View(new CreatePlantViewModel { WateredToday = true });
+        return View(new CreatePlantViewModel());
     }
 
     [HttpPost]
@@ -594,7 +354,7 @@ public class PlantController : Controller
     [ValidateAntiForgeryToken]
     public IActionResult BackToCreate(ConfirmSpeciesViewModel model)
     {
-        return View("Create", model.Draft ?? new CreatePlantViewModel { WateredToday = true });
+        return View("Create", model.Draft ?? new CreatePlantViewModel());
     }
 
     [HttpPost]
@@ -1221,6 +981,10 @@ public class PlantController : Controller
                 EventDate = e.EventDate,
                 Title = e.Title,
                 Summary = e.Summary,
+                DiaryId = e.DiaryId,
+                ImagePaths = e.ImageStoragePaths
+                    .Select(path => _imageStorageService.GetPublicPath(path))
+                    .ToList(),
                 HealthScore = e.HealthScore
             }).ToList(),
             Trend = MapTrend(trend),
@@ -1235,7 +999,10 @@ public class PlantController : Controller
                 IntervalDays = f.IntervalDays
             }).ToList(),
             NewFertilizer = new PlantFertilizerProductEditViewModel(),
-            Reminders = reminders.Select(MapReminder).ToList(),
+            Reminders = reminders
+                .Where(r => r.ReminderType is not (ReminderType.Watering or ReminderType.Fertilizing))
+                .Select(MapReminder)
+                .ToList(),
             NewPhoto = new CreatePhotoViewModel(),
             LogEntry = new TodayLogViewModel { LogDate = DateTime.Today }
         };
@@ -1444,8 +1211,8 @@ public class PlantController : Controller
         var existing = await _profileService.GetByPlantIdAsync(id, cancellationToken);
         await _profileService.SaveAsync(id, new PlantProfileDto
         {
-            WateringIntervalDays = model.WateringIntervalDays,
-            FertilizingIntervalDays = model.FertilizingIntervalDays,
+            WateringIntervalDays = existing?.WateringIntervalDays,
+            FertilizingIntervalDays = existing?.FertilizingIntervalDays,
             TargetHumidityMin = model.TargetHumidityMin,
             TargetHumidityMax = model.TargetHumidityMax,
             TargetTemperatureMin = model.TargetTemperatureMin,
@@ -1463,7 +1230,6 @@ public class PlantController : Controller
             EnvironmentMismatchAcknowledged = existing?.EnvironmentMismatchAcknowledged ?? false
         }, cancellationToken);
 
-        await _reminderService.SyncRemindersAsync(id, cancellationToken);
         TempData["Success"] = "個人化設定已儲存。";
         return RedirectToAction(nameof(Details), new { id });
     }
@@ -1479,25 +1245,9 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UploadPhoto(Guid id, [Bind(Prefix = "NewPhoto")] CreatePhotoViewModel model, IFormFile? photoFile, CancellationToken cancellationToken)
+    public IActionResult UploadPhoto(Guid id)
     {
-        if (photoFile == null || photoFile.Length == 0)
-        {
-            TempData["Error"] = "請選擇要上傳的照片。";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        await using var stream = photoFile.OpenReadStream();
-        await _imageService.UploadAsync(
-            id,
-            stream,
-            photoFile.FileName,
-            photoFile.ContentType,
-            model.Note,
-            model.SetAsCover,
-            cancellationToken);
-
-        TempData["Success"] = model.SetAsCover ? "照片已上傳並設為封面。" : "照片已上傳。";
+        TempData["Error"] = "新照片請用記一筆。";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -1523,8 +1273,17 @@ public class PlantController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeletePhoto(Guid id, Guid imageId, CancellationToken cancellationToken)
     {
-        await _imageService.DeleteAsync(imageId, cancellationToken);
-        TempData["Success"] = "照片已刪除。";
+        try
+        {
+            await _imageService.DeleteAsync(imageId, cancellationToken);
+            TempData["Success"] = "照片已刪除。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DeletePhoto failed for {ImageId}", imageId);
+            TempData["Error"] = ex.Message;
+        }
+
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -1537,18 +1296,9 @@ public class PlantController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CreateCareRecord(Guid id, CreateCareRecordViewModel model, CancellationToken cancellationToken)
+    public IActionResult CreateCareRecord(Guid id)
     {
-        if (!ModelState.IsValid)
-        {
-            TempData["Error"] = "照護紀錄資料不完整。";
-            return RedirectToAction(nameof(Details), new { id });
-        }
-
-        var unit = string.IsNullOrWhiteSpace(model.Unit) ? DefaultUnit(model.CareType) : model.Unit;
-        await _careService.CreateAsync(id, model.RecordDate, model.CareType, model.NumericValue, unit, model.Note, cancellationToken);
-        await _reminderService.SyncRemindersAsync(id, cancellationToken);
-        TempData["Success"] = "照護紀錄已新增。";
+        TempData["Error"] = "已不再記錄澆水或施肥。";
         return RedirectToAction(nameof(Details), new { id });
     }
 
@@ -1625,41 +1375,34 @@ public class PlantController : Controller
         bool stayOnDetails,
         CancellationToken cancellationToken)
     {
-        if (!model.Watered && !model.Fertilized && string.IsNullOrWhiteSpace(model.Note) && (photos == null || photos.Count == 0))
+        var files = photos?.Where(p => p.Length > 0).ToList() ?? [];
+        if (files.Count == 0)
         {
-            TempData["Error"] = "請至少勾選澆水／施肥，或寫一句話／上傳照片。";
+            TempData["Error"] = "記一筆至少要一張照片。";
             return RedirectToAction(nameof(Details), new { id });
         }
 
         try
         {
-            if (model.Watered)
-            {
-                await _careService.CreateAsync(id, day, CareRecordType.Watering, null, null, null, cancellationToken);
-            }
+            var diary = await _diaryService.CreateAsync(
+                id,
+                day,
+                null,
+                string.IsNullOrWhiteSpace(model.Note) ? null : model.Note.Trim(),
+                cancellationToken);
 
-            if (model.Fertilized)
+            foreach (var photo in files)
             {
-                await _careService.CreateAsync(id, day, CareRecordType.Fertilizing, null, null, null, cancellationToken);
-            }
-
-            if (!string.IsNullOrWhiteSpace(model.Note))
-            {
-                await _diaryService.CreateAsync(id, day, null, model.Note.Trim(), cancellationToken);
-            }
-
-            if (photos != null)
-            {
-                foreach (var photo in photos.Where(p => p.Length > 0))
-                {
-                    await using var stream = photo.OpenReadStream();
-                    await _imageService.UploadAsync(id, stream, photo.FileName, photo.ContentType, null, false, cancellationToken);
-                }
-            }
-
-            if (model.Watered)
-            {
-                await _reminderService.SyncRemindersAsync(id, cancellationToken);
+                await using var stream = photo.OpenReadStream();
+                await _imageService.UploadAsync(
+                    id,
+                    stream,
+                    photo.FileName,
+                    photo.ContentType,
+                    null,
+                    false,
+                    cancellationToken,
+                    diary.Id);
             }
 
             TempData["Success"] = day.Date == DateTime.Today ? "今日紀錄已儲存。" : $"已記上 {day:yyyy/MM/dd}。";
@@ -1667,6 +1410,73 @@ public class PlantController : Controller
         catch (Exception ex)
         {
             _logger.LogError(ex, "Save log failed for plant {PlantId}", id);
+            TempData["Error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateLogEntry(
+        Guid id,
+        Guid diaryId,
+        DateTime logDate,
+        string? note,
+        CancellationToken cancellationToken)
+    {
+        if (logDate.Date > DateTime.Today)
+        {
+            TempData["Error"] = "日期不能選未來。";
+            return RedirectToAction(nameof(Details), new { id });
+        }
+
+        try
+        {
+            var diaries = await _diaryService.GetByPlantIdAsync(id, cancellationToken);
+            if (diaries.All(d => d.Id != diaryId))
+            {
+                TempData["Error"] = "找不到這一筆。";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+
+            await _diaryService.UpdateAsync(diaryId, logDate, note, cancellationToken);
+            TempData["Success"] = "已更新這一筆。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "UpdateLogEntry failed for {DiaryId}", diaryId);
+            TempData["Error"] = ex.Message;
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteLogEntry(Guid id, Guid diaryId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var diaries = await _diaryService.GetByPlantIdAsync(id, cancellationToken);
+            if (diaries.All(d => d.Id != diaryId))
+            {
+                TempData["Error"] = "找不到這一筆。";
+                return RedirectToAction(nameof(Details), new { id });
+            }
+
+            var images = await _imageService.GetByPlantIdAsync(id, cancellationToken);
+            foreach (var image in images.Where(p => p.DiaryId == diaryId))
+            {
+                await _imageService.DeleteAsync(image.Id, cancellationToken, force: true);
+            }
+
+            await _diaryService.DeleteAsync(diaryId, cancellationToken);
+            TempData["Success"] = "已刪除這一筆與照片。";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "DeleteLogEntry failed for {DiaryId}", diaryId);
             TempData["Error"] = ex.Message;
         }
 

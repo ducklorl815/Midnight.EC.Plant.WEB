@@ -1,0 +1,17 @@
+{
+  "name": "midnight-ec-plant",
+  "private": true,
+  "scripts": {
+    "app": "node mobile/scripts/app.mjs",
+    "app:release": "node mobile/scripts/app.mjs --release"
+  },
+  "dependencies": {
+    "@capacitor/android": "6.2.0",
+    "@capacitor/app": "6.0.2",
+    "@capacitor/camera": "6.0.2",
+    "@capacitor/core": "6.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "6.2.0"
+  }
+}

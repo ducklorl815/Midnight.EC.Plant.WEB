@@ -9,3 +9,10 @@ Midnight.EC.Plant.WEB.Utility/bin/
 Midnight.EC.Plant.WEB.Utility/obj/
 
 appsettings.Development.json
+
+node_modules/
+mobile/android/
+mobile/app.config.local.json
+mobile/signing.local.json
+mobile/*.jks
+Midnight.EC.Plant.WEB/wwwroot/app/*.apk

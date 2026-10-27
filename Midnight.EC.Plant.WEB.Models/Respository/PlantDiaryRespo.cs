@@ -58,6 +58,17 @@ SELECT CAST(SCOPE_IDENTITY() AS int);";
         diary.Seq = await conn.ExecuteScalarAsync<int>(new CommandDefinition(sql, DbParams.From(diary), cancellationToken: cancellationToken));
     }
 
+    public async Task UpdateAsync(PlantDiaryModel diary, CancellationToken cancellationToken = default)
+    {
+        diary.ModifyDate = DateTime.UtcNow;
+        const string sql = @"
+UPDATE dbo.PlantDiary SET
+    ModifyDate = @ModifyDate, DiaryDate = @DiaryDate, Note = @Note, Title = @Title
+WHERE ID = @ID AND Deleted = 0";
+        using var conn = Conn();
+        await conn.ExecuteAsync(new CommandDefinition(sql, DbParams.From(diary), cancellationToken: cancellationToken));
+    }
+
     public async Task SoftDeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
         using var conn = Conn();

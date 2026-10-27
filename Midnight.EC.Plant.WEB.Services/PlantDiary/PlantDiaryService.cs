@@ -46,6 +46,16 @@ public class PlantDiaryService
         return created.ToDto();
     }
 
+    public async Task UpdateAsync(Guid diaryId, DateTime diaryDate, string? note, CancellationToken cancellationToken = default)
+    {
+        var diary = await _diaryRepository.GetByIdAsync(diaryId, cancellationToken)
+            ?? throw new InvalidOperationException("找不到這一筆。");
+
+        diary.DiaryDate = diaryDate.Date;
+        diary.Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        await _diaryRepository.UpdateAsync(diary, cancellationToken);
+    }
+
     public async Task DeleteAsync(Guid diaryId, CancellationToken cancellationToken = default)
     {
         var diary = await _diaryRepository.GetByIdAsync(diaryId, cancellationToken)

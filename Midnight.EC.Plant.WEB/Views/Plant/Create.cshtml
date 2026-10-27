@@ -36,14 +36,8 @@
                     <div class="mb-3">
                         <label asp-for="ChineseName" class="form-label"></label>
                         <input asp-for="ChineseName" class="form-control" placeholder="例如：圓葉山烏龜" />
-                        <div class="form-text">用來搜尋 iNaturalist / GBIF；找不到仍可先建檔後補。</div>
+                        <div class="form-text">用來找出物種。確認後會寫入照護知識。</div>
                         <span asp-validation-for="ChineseName" class="text-danger"></span>
-                    </div>
-
-                    <div class="form-check mb-3">
-                        <input asp-for="WateredToday" class="form-check-input" />
-                        <label asp-for="WateredToday" class="form-check-label"></label>
-                        <div class="form-text">預設勾選。取消則不會進入澆水待辦，直到你補上次澆水日。</div>
                     </div>
 
                     <div class="mb-0">

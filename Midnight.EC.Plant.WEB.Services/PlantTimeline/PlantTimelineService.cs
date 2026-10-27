@@ -1,58 +1,50 @@
 ﻿using Midnight.EC.Plant.WEB.Models.DTOs;
 using Midnight.EC.Plant.WEB.Models.Enums;
-using Midnight.EC.Plant.WEB.Models.Extensions;
 using Midnight.EC.Plant.WEB.Models.Respository;
-using Midnight.EC.Plant.WEB.Services.Interfaces;
 
 namespace Midnight.EC.Plant.WEB.Services.PlantTimeline;
 
 public class PlantTimelineService
 {
     private readonly PlantDiaryRespo _diaryRepository;
-    private readonly PlantCareRecordRespo _careRepository;
+    private readonly PlantImageRespo _imageRepository;
 
     public PlantTimelineService(
         PlantDiaryRespo diaryRepository,
-        PlantCareRecordRespo careRepository)
+        PlantImageRespo imageRepository)
     {
         _diaryRepository = diaryRepository;
-        _careRepository = careRepository;
+        _imageRepository = imageRepository;
     }
 
     public async Task<List<PlantTimelineEventDto>> GetTimelineAsync(Guid plantId, int days = 90, CancellationToken cancellationToken = default)
     {
-        var since = DateTime.UtcNow.Date.AddDays(-days + 1);
-        var events = new List<PlantTimelineEventDto>();
-
+        _ = days;
         var diaries = await _diaryRepository.GetByPlantIdAsync(plantId, cancellationToken);
-        events.AddRange(diaries
-            .Where(d => d.DiaryDate >= since && !string.IsNullOrWhiteSpace(d.Note))
-            .Select(d => new PlantTimelineEventDto
-            {
-                EventType = TimelineEventType.Diary,
-                EventDate = d.DiaryDate,
-                Title = "備註",
-                Summary = d.Note,
-                RelatedId = d.Id
-            }));
+        var images = await _imageRepository.GetByPlantIdAsync(plantId, cancellationToken);
 
-        var careRecords = await _careRepository.GetByPlantIdAsync(plantId, cancellationToken);
-        events.AddRange(careRecords
-            .Where(r => r.RecordDate >= since
-                && (r.CareType == CareRecordType.Watering || r.CareType == CareRecordType.Fertilizing))
-            .Select(r => new PlantTimelineEventDto
+        return diaries
+            .Select(d =>
             {
-                EventType = TimelineEventType.CareRecord,
-                EventDate = r.RecordDate,
-                Title = r.CareType.GetDisplayName(),
-                Summary = string.IsNullOrWhiteSpace(r.Note) ? null : r.Note,
-                RelatedId = r.Id
-            }));
-
-        return events
+                var paths = images
+                    .Where(i => i.DiaryID == d.Id)
+                    .Select(i => i.StoragePath)
+                    .Where(p => !string.IsNullOrWhiteSpace(p))
+                    .ToList();
+                return new PlantTimelineEventDto
+                {
+                    EventType = TimelineEventType.Diary,
+                    EventDate = d.DiaryDate,
+                    Title = "記一筆",
+                    Summary = string.IsNullOrWhiteSpace(d.Note) ? null : d.Note,
+                    RelatedId = d.Id,
+                    DiaryId = paths.Count > 0 ? d.Id : null,
+                    ImageStoragePaths = paths
+                };
+            })
+            .Where(e => e.ImageStoragePaths.Count > 0)
             .OrderByDescending(e => e.EventDate)
             .ThenByDescending(e => e.RelatedId)
             .ToList();
     }
 }
-

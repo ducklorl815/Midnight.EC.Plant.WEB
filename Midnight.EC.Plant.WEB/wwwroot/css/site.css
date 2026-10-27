@@ -1225,7 +1225,140 @@ footer.footer {
     border-radius: var(--plant-radius-sm);
 }
 
+.app-tabbar {
+    display: none;
+}
+
+.plant-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    gap: 0.85rem;
+}
+
+.plant-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--plant-surface);
+    border: 1px solid var(--plant-border);
+    border-radius: var(--plant-radius);
+    overflow: hidden;
+    box-shadow: var(--plant-shadow);
+    color: inherit;
+    text-decoration: none;
+    min-height: var(--plant-touch);
+}
+
+.plant-card:hover {
+    color: inherit;
+}
+
+.plant-card-cover {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    background: #e8ece9;
+    display: block;
+}
+
+.plant-card-cover-empty {
+    background:
+        radial-gradient(circle at 50% 42%, #d8e3db 0 18%, transparent 19%),
+        #e8ece9;
+}
+
+.plant-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.75rem 0.85rem 0.9rem;
+}
+
+.plant-card-name {
+    font-weight: 700;
+    color: var(--plant-text);
+}
+
+.plant-card-meta {
+    color: var(--plant-muted);
+    font-size: 0.85rem;
+}
+
 @media (max-width: 768px) {
+    .navbar .navbar-toggler,
+    .navbar .navbar-collapse,
+    footer.footer {
+        display: none !important;
+    }
+
+    .pc-nav,
+    .pc-site-footer {
+        display: none !important;
+    }
+
+    body:not(.wall-editor-chrome) {
+        padding-bottom: calc(4.4rem + env(safe-area-inset-bottom));
+    }
+
+    .app-tabbar {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 40;
+        margin: 0;
+        padding: 0.35rem 0.4rem calc(0.35rem + env(safe-area-inset-bottom));
+        background: rgba(255, 255, 255, 0.96);
+        border-top: 1px solid var(--plant-border);
+        backdrop-filter: blur(12px);
+    }
+
+    .app-tab {
+        min-height: var(--plant-touch);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        color: var(--plant-muted);
+        font-weight: 650;
+        font-size: 0.92rem;
+        text-decoration: none;
+    }
+
+    .app-tab.is-current {
+        background: var(--plant-emphasis-soft);
+        color: var(--plant-emphasis-dark);
+    }
+
+    .plant-list-add {
+        display: none !important;
+    }
+
+    .settings-row {
+        flex-direction: column;
+        align-items: stretch !important;
+    }
+
+    .settings-row .btn {
+        align-self: flex-start;
+    }
+
+    .form-control,
+    .form-select {
+        min-height: var(--plant-touch);
+        font-size: 16px;
+    }
+
+    .photo-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.65rem;
+    }
+
+    .panel-body {
+        padding: 1rem;
+    }
+
     .plant-hero {
         grid-template-columns: 1fr;
     }

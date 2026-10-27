@@ -180,7 +180,8 @@ public class PlantImageService
         string contentType,
         string? note,
         bool setAsCover,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? diaryId = null)
     {
         _ = await _plantRepository.GetByIdAsync(plantId, cancellationToken)
             ?? throw new InvalidOperationException("找不到植物。");
@@ -204,7 +205,8 @@ public class PlantImageService
             ContentType = contentType,
             FileSize = stored.FileSize,
             Sha256 = stored.Sha256,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            DiaryId = diaryId
         };
 
         await _imageRepository.InsertAsync(image, cancellationToken);
@@ -226,10 +228,20 @@ public class PlantImageService
         await _imageRepository.UpdateAsync(image, cancellationToken);
     }
 
-    public async Task DeleteAsync(Guid imageId, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid imageId, CancellationToken cancellationToken = default, bool force = false)
     {
         var image = await _imageRepository.GetByIdAsync(imageId, cancellationToken)
             ?? throw new InvalidOperationException("找不到圖片。");
+
+        if (!force && image.DiaryID is Guid diaryId)
+        {
+            var siblings = await _imageRepository.GetByPlantIdAsync(image.PlantID, cancellationToken);
+            var remaining = siblings.Count(i => i.DiaryID == diaryId && i.ID != image.ID);
+            if (remaining == 0)
+            {
+                throw new InvalidOperationException("這一筆至少要留一張照片。要去掉請刪除整筆。");
+            }
+        }
 
         var absolutePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", image.StoragePath);
         if (File.Exists(absolutePath))

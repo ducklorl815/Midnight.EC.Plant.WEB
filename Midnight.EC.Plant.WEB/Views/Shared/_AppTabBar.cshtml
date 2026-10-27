@@ -1,0 +1,14 @@
+@{
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    var onHome = controller == "Plant" && action == "Index";
+    var onPlants = controller == "Plant" && action is "List" or "Details" or "Edit" or "EditEnvironment";
+    var onCreate = controller == "Plant" && action is "Create" or "ConfirmSpecies" or "ReselectSpecies";
+    var onSettings = controller == "Settings";
+}
+<nav class="app-tabbar" aria-label="主要畫面">
+    <a class="app-tab @(onHome ? "is-current" : "")" asp-controller="Plant" asp-action="Index" aria-current="@(onHome ? "page" : null)">首頁</a>
+    <a class="app-tab @(onPlants ? "is-current" : "")" asp-controller="Plant" asp-action="List" aria-current="@(onPlants ? "page" : null)">我的植栽</a>
+    <a class="app-tab @(onCreate ? "is-current" : "")" asp-controller="Plant" asp-action="Create" aria-current="@(onCreate ? "page" : null)">新增</a>
+    <a class="app-tab @(onSettings ? "is-current" : "")" asp-controller="Settings" asp-action="Index" aria-current="@(onSettings ? "page" : null)">設定</a>
+</nav>

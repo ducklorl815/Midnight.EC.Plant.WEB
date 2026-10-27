@@ -73,14 +73,6 @@
             <p class="plant-hero-location">@locationText</p>
         }
         <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
-            @if (Model.DaysSinceLastWatering.HasValue)
-            {
-                <span class="status-pill status-pill-action">距上次澆水 @Model.DaysSinceLastWatering 天</span>
-            }
-            else
-            {
-                <span class="status-pill status-pill-muted">尚無澆水紀錄</span>
-            }
             @if (Model.LatestHealthScore.HasValue)
             {
                 <span class="health-badge health-badge-@(Model.LatestHealthScore >= 70 ? "good" : Model.LatestHealthScore >= 50 ? "warn" : "bad")">
@@ -98,7 +90,7 @@
 <section id="log-entry" class="panel mb-4">
     <div class="panel-header">
         <strong>記一筆</strong>
-        <span class="text-muted small">日期可今天或過去 · 照片可選</span>
+        <span class="text-muted small">一次拍照 · 日期可今天或過去 · 至少一張照片</span>
     </div>
     <div class="panel-body">
         <form asp-action="SaveLogEntry" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data">
@@ -106,49 +98,61 @@
             <div class="row g-3 align-items-end mb-3">
                 <div class="col-md-3">
                     <label asp-for="LogEntry.LogDate" class="form-label"></label>
-                    <input asp-for="LogEntry.LogDate" class="form-control" type="date" />
+                    <input asp-for="LogEntry.LogDate" class="form-control" type="date" max="@DateTime.Today.ToString("yyyy-MM-dd")" />
                 </div>
-                <div class="col-md-2">
-                    <div class="form-check mt-4">
-                        <input asp-for="LogEntry.Watered" class="form-check-input" />
-                        <label asp-for="LogEntry.Watered" class="form-check-label fw-semibold">澆水</label>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="form-check mt-4">
-                        <input asp-for="LogEntry.Fertilized" class="form-check-input" />
-                        <label asp-for="LogEntry.Fertilized" class="form-check-label">施肥</label>
-                    </div>
-                </div>
-                <div class="col-md-5">
+                <div class="col-md-9">
                     <label asp-for="LogEntry.Note" class="form-label"></label>
                     <input asp-for="LogEntry.Note" class="form-control" placeholder="可選：草況一句話" />
                 </div>
             </div>
             <div class="mb-3">
-                <label class="form-label">照片（可選，可多張）</label>
-                <input type="file" name="photos" class="form-control" accept="image/*" multiple />
+                <label class="form-label">照片（至少一張，可多張）</label>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="log-camera">拍照</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="log-gallery">從相簿選</button>
+                </div>
+                <input type="file" name="photos" id="log-photos" class="form-control" accept="image/*" multiple required />
             </div>
             <button type="submit" class="btn btn-plant-primary">存檔</button>
-            <span class="text-muted small ms-2">至少勾選澆水／施肥，或寫備註／上傳照片</span>
         </form>
 
         @if (Model.Timeline.Any())
         {
             <hr class="my-4" />
-            <div class="small text-muted mb-2">近期時間軸（澆水／施肥／備註）</div>
+            <div class="small text-muted mb-2">時間軸</div>
             <ul class="list-group list-group-flush">
-                @foreach (var item in Model.Timeline.Take(30))
+                @foreach (var item in Model.Timeline)
                 {
-                    <li class="list-group-item px-0 d-flex justify-content-between gap-3">
-                        <div>
-                            <span class="fw-semibold">@item.Title</span>
-                            @if (!string.IsNullOrWhiteSpace(item.Summary))
+                    <li class="list-group-item px-0">
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            @foreach (var path in item.ImagePaths)
                             {
-                                <span class="text-muted">· @item.Summary</span>
+                                <img src="@path" alt="" class="rounded" style="width:72px;height:72px;object-fit:cover;" />
                             }
                         </div>
-                        <div class="text-muted small text-nowrap">@item.EventDate.ToString("yyyy/MM/dd")</div>
+                        @if (item.DiaryId.HasValue)
+                        {
+                            <form asp-action="UpdateLogEntry" asp-route-id="@Model.Id" method="post" class="row g-2 align-items-end">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="diaryId" value="@item.DiaryId" />
+                                <div class="col-md-3">
+                                    <label class="form-label small mb-0">日期</label>
+                                    <input type="date" name="logDate" class="form-control form-control-sm" value="@item.EventDate.ToString("yyyy-MM-dd")" max="@DateTime.Today.ToString("yyyy-MM-dd")" required />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small mb-0">備註</label>
+                                    <input type="text" name="note" class="form-control form-control-sm" value="@item.Summary" />
+                                </div>
+                                <div class="col-md-3 d-flex gap-1">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">儲存</button>
+                                </div>
+                            </form>
+                            <form asp-action="DeleteLogEntry" asp-route-id="@Model.Id" method="post" class="mt-1" onsubmit="return confirm('刪除這一筆會一併刪掉照片。確定？');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="diaryId" value="@item.DiaryId" />
+                                <button type="submit" class="btn btn-link btn-sm text-danger p-0">刪除這筆</button>
+                            </form>
+                        }
                     </li>
                 }
             </ul>
@@ -158,34 +162,13 @@
 
 <section class="panel mb-4">
     <div class="panel-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <strong>照片牆</strong>
-        <span class="text-muted small">上傳後可對單張做 AI 分析</span>
+        <strong>相簿</strong>
+        <span class="text-muted small">新照片從記一筆進來 · 可對單張做 AI 分析</span>
     </div>
     <div class="panel-body">
-        <form asp-action="UploadPhoto" asp-route-id="@Model.Id" method="post" enctype="multipart/form-data" class="upload-panel mb-4">
-            @Html.AntiForgeryToken()
-            <div class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label">選擇照片</label>
-                    <input type="file" name="photoFile" accept="image/*" class="form-control" required />
-                </div>
-                <div class="col-md-5">
-                    <label asp-for="NewPhoto.Note" class="form-label"></label>
-                    <input asp-for="NewPhoto.Note" class="form-control" placeholder="例如：葉片發黃、疑似缺肥、新長側芽" />
-                </div>
-                <div class="col-md-3">
-                    <div class="form-check mb-2">
-                        <input asp-for="NewPhoto.SetAsCover" class="form-check-input" />
-                        <label asp-for="NewPhoto.SetAsCover" class="form-check-label"></label>
-                    </div>
-                    <button type="submit" class="btn btn-plant-primary w-100">上傳照片</button>
-                </div>
-            </div>
-        </form>
-
         @if (!Model.Photos.Any())
         {
-            <p class="text-muted mb-0">尚無照片。上傳後會出現在照片牆，也可做 AI 草況分析。</p>
+            <p class="text-muted mb-0">尚無照片。用上方記一筆拍一張，就會出現在這裡。</p>
         }
         else
         {
@@ -315,7 +298,6 @@
                     var speciesGuide = CareGuideJson.TryParseSpeciesGuide(Model.Knowledge?.ExternalCareGuide);
                     ViewBag.LegacyCareGuide = speciesGuide == null ? Model.Knowledge?.ExternalCareGuide : null;
                     var suggestedDays = Model.CareSuggestions.SuggestedWateringIntervalDays;
-                    var myDays = Model.Profile.WateringIntervalDays;
                     var missing = Model.Knowledge?.MissingFields ?? [];
                     bool Miss(string label) => missing.Contains(label);
                 }
@@ -371,10 +353,6 @@
                         <span>生長季</span>
                         @(string.IsNullOrWhiteSpace(Model.Knowledge?.GrowthSeason) ? "未設定" : Model.Knowledge!.GrowthSeason)
                     </div>
-                    @if (myDays.HasValue)
-                    {
-                        <div><span>我的澆水周期</span>每 @myDays 天</div>
-                    }
                 </div>
 
                 @if (Miss("結構化照護指南"))
@@ -446,17 +424,6 @@
                 <form asp-action="SaveProfile" asp-route-id="@Model.Id" method="post">
                     @Html.AntiForgeryToken()
                     <div class="row g-2">
-                        <div class="col-6">
-                            <label asp-for="Profile.WateringIntervalDays" class="form-label small"></label>
-                            <input asp-for="Profile.WateringIntervalDays" class="form-control form-control-sm" type="number" min="1" />
-                        </div>
-                        <div class="col-6">
-                            <label asp-for="Profile.FertilizingIntervalDays" class="form-label small"></label>
-                            <input asp-for="Profile.FertilizingIntervalDays" class="form-control form-control-sm" type="number" min="1" />
-                        </div>
-                        <div class="col-12">
-                            <p class="small text-muted mb-0">上方「施肥間隔」供尚未設定盆用肥料時使用；有盆用肥料後，植栽清單以各肥種週期為準。</p>
-                        </div>
                         <div class="col-12">
                             <label asp-for="Profile.PersonalCareNotes" class="form-label small"></label>
                             <input asp-for="Profile.PersonalCareNotes" class="form-control form-control-sm" />
@@ -464,65 +431,13 @@
                     </div>
                     <button type="submit" class="btn btn-brand btn-sm mt-3">儲存設定</button>
                 </form>
-
-                <hr class="my-3" />
-                <h3 class="h6 mb-2">盆用肥料</h3>
-                <p class="small text-muted">為此盆自訂肥種名稱與週期（例如 A肥、B肥）。植栽清單會分別倒數並可快速施肥。</p>
-                @if (Model.FertilizerProducts.Count > 0)
-                {
-                    <ul class="list-unstyled mb-3">
-                        @foreach (var fert in Model.FertilizerProducts)
-                        {
-                            <li class="border rounded p-2 mb-2">
-                                <form asp-action="UpdateFertilizerProduct" asp-route-id="@Model.Id" method="post" class="row g-2 align-items-end">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="fertilizerProductId" value="@fert.Id" />
-                                    <div class="col-6">
-                                        <label class="form-label small mb-0">名稱</label>
-                                        <input name="Name" class="form-control form-control-sm" value="@fert.Name" maxlength="64" required />
-                                    </div>
-                                    <div class="col-3">
-                                        <label class="form-label small mb-0">間隔天</label>
-                                        <input name="IntervalDays" type="number" min="1" max="365" class="form-control form-control-sm" value="@fert.IntervalDays" required />
-                                    </div>
-                                    <div class="col-3 d-flex gap-1">
-                                        <button type="submit" class="btn btn-sm btn-outline-emphasis flex-grow-1">存</button>
-                                    </div>
-                                </form>
-                                <form asp-action="DeleteFertilizerProduct" asp-route-id="@Model.Id" method="post" class="mt-1"
-                                      onsubmit="return confirm('確定刪除此肥料？');">
-                                    @Html.AntiForgeryToken()
-                                    <input type="hidden" name="fertilizerProductId" value="@fert.Id" />
-                                    <button type="submit" class="btn btn-link btn-sm text-danger p-0">刪除</button>
-                                </form>
-                            </li>
-                        }
-                    </ul>
-                }
-                else
-                {
-                    <p class="small text-muted">尚未新增盆用肥料；清單會顯示單一「施肥」列。</p>
-                }
-                <form asp-action="AddFertilizerProduct" asp-route-id="@Model.Id" method="post" class="row g-2 align-items-end">
-                    @Html.AntiForgeryToken()
-                    <div class="col-6">
-                        <label asp-for="NewFertilizer.Name" class="form-label small mb-0"></label>
-                        <input asp-for="NewFertilizer.Name" class="form-control form-control-sm" placeholder="例如 A肥" />
-                    </div>
-                    <div class="col-3">
-                        <label asp-for="NewFertilizer.IntervalDays" class="form-label small mb-0"></label>
-                        <input asp-for="NewFertilizer.IntervalDays" class="form-control form-control-sm" type="number" min="1" />
-                    </div>
-                    <div class="col-3">
-                        <button type="submit" class="btn btn-sm btn-brand w-100">新增</button>
-                    </div>
-                </form>
             </div>
         </section>
     </div>
 </div>
 
 @section Scripts {
+    <script src="~/js/plant-log-capture.js" asp-append-version="true"></script>
     <script>
         (function () {
             document.querySelectorAll('.analyze-photo-btn').forEach(function (btn) {

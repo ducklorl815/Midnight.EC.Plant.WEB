@@ -92,7 +92,7 @@ public class CreatePlantViewModel
     public string ChineseName { get; set; } = string.Empty;
 
     [Display(Name = "今天已澆水")]
-    public bool WateredToday { get; set; } = true;
+    public bool WateredToday { get; set; }
 
     [Display(Name = "備註")]
     public string? Description { get; set; }
@@ -529,6 +529,8 @@ public class PlantTimelineItemViewModel
     public DateTime EventDate { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? Summary { get; set; }
+    public Guid? DiaryId { get; set; }
+    public List<string> ImagePaths { get; set; } = [];
     public int? HealthScore { get; set; }
 }
 
